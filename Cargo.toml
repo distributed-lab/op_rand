@@ -1,0 +1,14 @@
+[workspace]
+members = ["crates/op-rand"]
+
+[workspace.package]
+name = "op-rand"
+version = "0.1.0"
+edition = "2024"
+
+[workspace.dependencies]
+bitcoin = { version = "0.32.6", default-features = false }
+tokio = { version = "1.45.1", default-features = false }
+eyre = { version = "0.6.12", default-features = false }
+serde = { version = "1.0.219", default-features = false }
+serde_json = { version = "1.0.140", default-features = false }
