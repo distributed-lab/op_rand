@@ -1,0 +1,7 @@
+[package]
+name = "common"
+type = "lib"
+
+[dependencies]
+sort = { tag = "v0.2.0", git = "https://github.com/noir-lang/noir_sort" }
+ripemd160 = { tag = "v0.0.1", git = "https://github.com/distributed-lab/noir-ripemd160" }

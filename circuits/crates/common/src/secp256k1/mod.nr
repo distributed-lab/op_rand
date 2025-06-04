@@ -1,14 +1,15 @@
 pub(crate) mod curve_jac;
 pub(crate) mod utils;
 pub(crate) mod scalar_field;
+pub(crate) mod curve_params;
 
-use crate::bignum::bignum::BigNumTrait;
-use super::bignum::bignum::BigNum;
-
-use dep::sort::sort_advanced;
 use curve_jac::{AffineTranscript, CurveJ};
 use scalar_field::ScalarField;
 use utils::hash_to_curve::hash_to_curve;
+use sort::sort_advanced;
+use crate::bignum::bignum::BigNumTrait;
+
+pub use curve_params::Secp256k1;
 
 fn __sort_field_as_u32(lhs: Field, rhs: Field) -> bool {
     lhs as u32 < rhs as u32

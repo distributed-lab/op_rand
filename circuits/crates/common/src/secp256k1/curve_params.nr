@@ -1,10 +1,9 @@
-use crate::bignum::BigNum;
+use crate::bignum::bignum::BigNum;
 use crate::bignum::fields::secp256k1Fq::Secp256k1_Fq_Params;
 use crate::bignum::fields::secp256k1Fr::Secp256k1_Fr_Params;
-use crate::big_curve::CurveParamsTrait;
-use crate::big_curve::BigCurve;
-use crate::big_curve::scalar_field::ScalarField;
-
+use crate::secp256k1::BigCurve;
+use crate::secp256k1::scalar_field::ScalarField;
+use super::CurveParamsTrait;
 global SECP256k1_SCALAR_SLICES: u32 = 65;
 pub struct Secp256k1_Params {}
 impl CurveParamsTrait<BigNum<3, 256, Secp256k1_Fq_Params>> for Secp256k1_Params {

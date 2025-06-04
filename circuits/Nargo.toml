@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "crates/common",
+    "crates/discrete_log_circuit",
+    "crates/signature_circuit",
+]

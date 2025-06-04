@@ -59,3 +59,39 @@ pub(crate) fn to_le_bytes<let N: u32, let MOD_BITS: u32, let NBytes: u32>(
     }
     result
 }
+
+pub(crate) fn to_be_bytes<let N: u32, let MOD_BITS: u32, let NBytes: u32>(
+    val: [Field; N],
+) -> [u8; NBytes] {
+    let nbytes = (MOD_BITS / 8) + (MOD_BITS % 8 != 0) as u32;
+    assert(nbytes <= NBytes);
+
+    let mut result: [u8; NBytes] = [0; NBytes];
+
+    // Start from the most significant limb (last in array) and work backwards
+    let excess_bytes = N * 15 - NBytes;
+    let final_limb_bytes = 15 - excess_bytes;
+
+    // Handle the most significant limb first
+    let last_limb_bytes: [u8; 15] = val[N - 1].to_le_bytes();
+    let mut byte_index = 0;
+
+    // Copy bytes from the most significant limb in big-endian order
+    for i in 0..final_limb_bytes {
+        result[byte_index] = last_limb_bytes[final_limb_bytes - 1 - i];
+        byte_index += 1;
+    }
+
+    // Handle the remaining limbs in reverse order
+    for i in 1..N {
+        let limb_index = N - i - 1;
+        let limb_bytes: [u8; 15] = val[limb_index].to_le_bytes();
+        // Copy 15 bytes in big-endian order (reverse of little-endian)
+        for j in 0..15 {
+            result[byte_index] = limb_bytes[14 - j];
+            byte_index += 1;
+        }
+    }
+
+    result
+}
