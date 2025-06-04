@@ -1,8 +1,0 @@
-[package]
-name = "discrete_log_circuit"
-type = "bin"
-authors = [""]
-
-# [dependencies]
-# common = { path = "../common" }
-# ripemd160 = { workspace = true }

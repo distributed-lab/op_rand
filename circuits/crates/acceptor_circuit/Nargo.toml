@@ -1,5 +1,5 @@
 [package]
-name = "signature_circuit"
+name = "acceptor_circuit"
 type = "bin"
 authors = [""]
 

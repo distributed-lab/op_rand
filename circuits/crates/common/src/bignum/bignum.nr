@@ -15,6 +15,7 @@ use super::fns::{
     },
 };
 use std::ops::{Add, Div, Mul, Neg, Sub};
+use super::fns::serialization::to_be_bytes;
 
 pub struct BigNum<let N: u32, let MOD_BITS: u32, Params> {
     pub limbs: [Field; N],
@@ -31,7 +32,7 @@ pub trait BigNumTrait: Neg + Add + Sub + Mul + Div + Eq {
     pub fn from_slice(limbs: [Field]) -> Self;
     pub fn from_be_bytes<let NBytes: u32>(x: [u8; NBytes]) -> Self;
     pub fn to_le_bytes<let NBytes: u32>(self) -> [u8; NBytes];
-
+    pub fn to_be_bytes<let NBytes: u32>(self) -> [u8; NBytes];
     pub fn modulus() -> Self;
     pub fn modulus_bits(self) -> u32;
     pub fn num_limbs(self) -> u32;
@@ -133,6 +134,10 @@ where
 
     fn to_le_bytes<let NBytes: u32>(self) -> [u8; NBytes] {
         to_le_bytes::<_, MOD_BITS, _>(self.limbs)
+    }
+
+    fn to_be_bytes<let NBytes: u32>(self) -> [u8; NBytes] {
+        to_be_bytes::<_, MOD_BITS, _>(self.limbs)
     }
 
     fn modulus() -> Self {

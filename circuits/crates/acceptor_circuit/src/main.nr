@@ -1,5 +1,6 @@
 // use common::{bignum::bignum::BigNum, secp256k1};
 use common::{bignum::bignum::BigNum, secp256k1::Secp256k1, utils::point_to_address};
+use std::hash::sha256;
 
 fn main(
     // Acceptor's public key
@@ -17,7 +18,7 @@ fn main(
     ADDR: pub [u8; 20],
 ) {
     // Verify the signature
-    let valid_signature = std::ecdsa_secp256k1::verify_signature(PK_x, PK_y, S, ADDR);
+    let valid_signature = std::ecdsa_secp256k1::verify_signature(PK_x, PK_y, S, sha256(ADDR));
     assert(valid_signature);
 
     // Instantiate the public keys
