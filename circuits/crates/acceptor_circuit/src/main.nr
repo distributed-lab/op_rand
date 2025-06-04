@@ -1,5 +1,5 @@
 // use common::{bignum::bignum::BigNum, secp256k1};
-use common::{bignum::bignum::BigNum, secp256k1::Secp256k1, utils::point_to_address};
+use common::{bignum::bignum::BigNum, secp256k1::curve_params::Secp256k1, utils::point_to_address};
 use std::hash::sha256;
 
 fn main(
