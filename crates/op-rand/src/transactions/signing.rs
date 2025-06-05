@@ -1,146 +1,110 @@
 use bitcoin::{
-    key::{PublicKey, Secp256k1, PrivateKey},
+    secp256k1::{Message, All},
+    key::{Secp256k1, PrivateKey},
+    sighash::SighashCache,
     script::ScriptBuf,
-    Transaction,
-    TxOut,
-    EcdsaSighashType,
-    sighash::{SighashCache},
-    secp256k1::{Message, All, Scalar},
-    Network
+    EcdsaSighashType, Transaction, TxOut, Psbt
+};
+use bitcoin::psbt::PsbtSighashType;
+use crate::transactions::{
+    errors::TransactionError,
 };
 
-use std::error::Error;
-
-/// Helper function, performing exact logic on signing single input corresponding to P2WPKH output
-fn sign_p2wpkh_input(
-    secp: &Secp256k1<All>,
-    tx: &mut Transaction,
-    input_index: usize,
-    txout: &TxOut,
-    public_key: &PublicKey,
-    private_key: &PrivateKey,
-    sighash_type: EcdsaSighashType,
-) -> Result<(), Box<dyn Error>> {
-    let script_code = ScriptBuf::new_p2pkh(&public_key.pubkey_hash());
-    let mut sighasher = SighashCache::new(tx.clone());
-
-    let sighash = sighasher.p2wpkh_signature_hash(
-        input_index,
-        &script_code,
-        txout.value,
-        sighash_type,
-    ).expect("Error computing sighash.");
-
-    let message = Message::from_digest_slice(sighash.as_ref())
-        .expect("Invalid message digest.");
-    let signature = secp.sign_ecdsa(&message, &private_key.inner);
-
-    let mut final_signature = signature.serialize_der().to_vec();
-    final_signature.push(sighash_type as u8);
-
-    tx.input[input_index].witness.clear();
-    tx.input[input_index].witness.push(final_signature);
-    tx.input[input_index].witness.push(public_key.to_bytes());
-
-    Ok(())
+/// `TransactionSigner` performs signing of any transaction, passed to corresponding methods,
+/// with a same Secp256k1 context and same private key
+pub struct TransactionSigner {
+    secp: Secp256k1<All>,
+    private_key: PrivateKey,
 }
 
-/// Signs deposit transaction's multiple inputs with the same public and private key,
-/// assuming the counterparty deposits only outputs owned by the same public key
-pub fn sign_multi_input_dep_tx(
-    secp: &Secp256k1<All>,
-    tx: &mut Transaction,
-    txouts: Vec<TxOut>,
-    public_key: &PublicKey,
-    private_key: &PrivateKey,
-) -> Result<(), Box<dyn Error>> {
-    if tx.input.len() != txouts.len() {
-        return Err(Box::from(
-            "Txouts number must match number of transaction inputs."
-        ))
+impl TransactionSigner {
+    pub fn new(secp: Secp256k1<All>, private_key: PrivateKey) -> TransactionSigner {
+        TransactionSigner { secp, private_key }
     }
 
-    for (input_index, txout) in txouts.iter().enumerate() {
-        sign_p2wpkh_input(
-            secp,
-            tx,
-            input_index,
-            txout,
-            public_key,
-            private_key,
-            EcdsaSighashType::All,
+    /// Signs single input inside `Transaction` by its index
+    /// - `txout` refers to output being spent by this input
+    fn sign_tx_input(
+        &self,
+        tx: &mut Transaction,
+        input_index: usize,
+        txout: &TxOut,
+    ) -> Result<(), TransactionError> {
+        let public_key = self.private_key.public_key(&self.secp);
+        let script_code = ScriptBuf::new_p2pkh(&public_key.pubkey_hash());
+
+        let mut sighasher = SighashCache::new(tx.clone());
+        let sighash = sighasher.p2wpkh_signature_hash(
+            input_index, &script_code, txout.value, EcdsaSighashType::All,
         )?;
+
+        let tx_input = tx.input.get_mut(input_index)
+            .ok_or(TransactionError::InputIndexOutOfBounds)?;
+
+        let message = Message::from_digest_slice(sighash.as_ref())?;
+        let signature = self.secp.sign_ecdsa(&message, &self.private_key.inner);
+
+        let mut final_signature = signature.serialize_der().to_vec();
+        final_signature.push(EcdsaSighashType::All as u8);
+
+        tx_input.witness.clear();
+        tx_input.witness.push(final_signature);
+        tx_input.witness.push(public_key.to_bytes());
+
+        Ok(())
     }
 
-    Ok(())
-}
+    /// Signs single input inside `Psbt` by its index
+    /// - `txout` refers to output being spent by this input
+    pub fn sign_psbt_input(
+        &self,
+        psbt: &mut Psbt,
+        input_index: usize,
+        txout: &TxOut,
+    ) -> Result<(), TransactionError> {
+        let psbt_input = psbt.inputs.get_mut(input_index)
+            .ok_or(TransactionError::InputIndexOutOfBounds)?;
 
-/// Signs initial transaction input, corresponding to deposit transaction's output, with
-/// provided public and private keys
-pub fn sign_init_tx(
-    secp: &Secp256k1<All>,
-    tx: &mut Transaction,
-    txout: &TxOut,
-    public_key: &PublicKey,
-    private_key: &PrivateKey,
-) -> Result<(), Box<dyn Error>> {
-    sign_p2wpkh_input(
-        secp,
-        tx,
-        0,
-        txout,
-        public_key,
-        private_key,
-        EcdsaSighashType::All
-    )
-}
+        let public_key = self.private_key.public_key(&self.secp);
+        let script_code = ScriptBuf::new_p2pkh(&public_key.pubkey_hash());
 
-/// Signs closing transaction's inputs, corresponding to initial transaction and deposit
-/// transaction, with provided public and private keys
-pub fn sign_close_tx(
-    secp: &Secp256k1<All>,
-    tx: &mut Transaction,
-    init_txout: &TxOut,
-    init_public_key: &PublicKey,
-    init_private_key: &PrivateKey,
-    dep_txout: &TxOut,
-    dep_public_key: &PublicKey,
-    dep_private_key: &PrivateKey,
-) -> Result<(), Box<dyn Error>> {
-    sign_p2wpkh_input(
-        secp,
-        tx,
-        0,
-        init_txout,
-        init_public_key,
-        init_private_key,
-        EcdsaSighashType::All
-    )?;
+        let mut sighasher = SighashCache::new(&psbt.unsigned_tx);
+        let sighash = sighasher.p2wpkh_signature_hash(
+            input_index, &script_code, txout.value, EcdsaSighashType::All,
+        )?;
 
-    sign_p2wpkh_input(
-        secp,
-        tx,
-        1,
-        dep_txout,
-        dep_public_key,
-        dep_private_key,
-        EcdsaSighashType::All
-    )?;
+        let message = Message::from_digest_slice(sighash.as_ref())?;
+        let signature = self.secp.sign_ecdsa(&message, &self.private_key.inner);
 
-    Ok(())
-}
+        let final_signature = bitcoin::ecdsa::Signature {
+            signature, sighash_type: EcdsaSighashType::All
+        };
 
-/// Combines secret key `pk_base` with tweak `pk_tweak`, returning private key suitable
-/// for signing messages with corresponding combined public key
-pub fn combine_secret_keys(
-    pk_base: &PrivateKey,
-    pk_tweak: &PrivateKey,
-) -> Result<PrivateKey, bitcoin::secp256k1::Error> {
-    let combined_pk_inner = pk_base.inner;
-    let tweak_scalar = Scalar::from_be_bytes(pk_tweak.inner.secret_bytes())
-            .map_err(|_| bitcoin::secp256k1::Error::InvalidSecretKey)?;
+        psbt_input.partial_sigs.insert(public_key, final_signature);
 
-    combined_pk_inner.add_tweak(&tweak_scalar)?;
+        let psbt_sighash_type = PsbtSighashType::from(EcdsaSighashType::All);
+        if psbt_input.sighash_type.is_none() {
+            psbt_input.sighash_type = Some(psbt_sighash_type);
+        }
 
-    Ok(PrivateKey::from_slice(&combined_pk_inner.secret_bytes(), Network::Bitcoin)?)
+        Ok(())
+    }
+
+    /// Signs multiple inputs with the same public and private key,
+    /// assuming the performer uses only outputs owned by the same public key
+    pub fn sign_multi_input(
+        &self,
+        tx: &mut Transaction,
+        txouts: Vec<TxOut>,
+    ) -> Result<(), TransactionError> {
+        if tx.input.len() != txouts.len() {
+            return Err(TransactionError::InputsOutputsLengthMismatch);
+        }
+
+        for (input_index, txout) in txouts.iter().enumerate() {
+            self.sign_tx_input(tx, input_index, txout)?;
+        }
+
+        Ok(())
+    }
 }
