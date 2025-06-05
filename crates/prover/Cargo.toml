@@ -1,0 +1,7 @@
+[package]
+name = "op-rand-prover"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+secp256k1 = { workspace = true, features = ["hashes", "rand"] }
