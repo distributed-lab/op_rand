@@ -6,6 +6,9 @@ use secp256k1::{
 
 use rand::seq::IteratorRandom;
 
+const COMMITMENTS_COUNT: usize = 2;
+
+#[derive(Debug, Clone)]
 pub struct FirstRankCommitment {
     secret_key: SecretKey,
     public_key: PublicKey,
@@ -17,6 +20,7 @@ impl FirstRankCommitment {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct ThirdRankCommitment {
     public_key: PublicKey,
 }
@@ -28,18 +32,18 @@ impl ThirdRankCommitment {
 }
 
 /// Second rank commitments are intermediate and are only used to generate the third rank commitments.
+#[derive(Debug, Clone)]
 pub struct Commitments {
-    first_rank_commitments: Vec<FirstRankCommitment>,
-    third_rank_commitments: Vec<ThirdRankCommitment>,
+    first_rank_commitments: [FirstRankCommitment; 2],
+    third_rank_commitments: [ThirdRankCommitment; 2],
 }
 
 impl Commitments {
     pub fn generate<C: Signing, R: rand::Rng + ?Sized>(
-        n: usize,
         ctx: &Secp256k1<C>,
         rng: &mut R,
     ) -> Result<Self, secp256k1::Error> {
-        let first_rank_commitments = (0..n)
+        let first_rank_commitments = (0..COMMITMENTS_COUNT)
             .map(|_| {
                 let (first_rank_sk, first_rank_pk) = ctx.generate_keypair(rng);
                 FirstRankCommitment {
@@ -73,6 +77,10 @@ impl Commitments {
             })
             .collect::<Vec<_>>();
 
+        // TODO: we currently only support 2 commitments
+        let first_rank_commitments = first_rank_commitments.try_into().unwrap();
+        let third_rank_commitments = third_rank_commitments.try_into().unwrap();
+
         Ok(Commitments {
             first_rank_commitments,
             third_rank_commitments,
@@ -99,5 +107,13 @@ impl Commitments {
 
     pub fn pick_third_rank_commitment(&self, i: usize) -> Option<&ThirdRankCommitment> {
         self.third_rank_commitments.get(i)
+    }
+
+    pub fn first_rank_commitments(&self) -> &[FirstRankCommitment; COMMITMENTS_COUNT] {
+        &self.first_rank_commitments
+    }
+
+    pub fn third_rank_commitments(&self) -> &[ThirdRankCommitment; COMMITMENTS_COUNT] {
+        &self.third_rank_commitments
     }
 }
