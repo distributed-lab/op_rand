@@ -1998,6 +1998,7 @@ dependencies = [
  "lazy_static",
  "noir_rs",
  "secp256k1",
+ "serde",
  "serde_json",
 ]
 

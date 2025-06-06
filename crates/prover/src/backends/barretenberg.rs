@@ -92,10 +92,20 @@ impl OpRandProver for BarretenbergProver {
 
     fn verify_challenger_proof(
         &self,
+        _third_rank_commitments: [ThirdRankCommitment; 2],
+        _challenger_public_key: &secp256k1::PublicKey,
+        _challenger_public_key_hash: [u8; 20],
         proof: &OpRandProof,
-    ) -> Result<bool, crate::errors::ProverError> {
-        verify_ultra_honk(proof.proof().to_vec(), proof.vk().to_vec())
-            .map_err(|e| crate::errors::ProverError::ProofVerificationError(e.to_string()))
+    ) -> Result<(), crate::errors::ProverError> {
+        // TODO: Add verification of public inputs
+        let verdict = verify_ultra_honk(proof.proof().to_vec(), proof.vk().to_vec())
+            .map_err(|e| crate::errors::ProverError::ProofVerificationError(e.to_string()))?;
+
+        if !verdict {
+            return Err(crate::errors::ProverError::InvalidProof);
+        }
+
+        Ok(())
     }
 
     fn generate_acceptor_proof(
@@ -155,14 +165,23 @@ impl OpRandProver for BarretenbergProver {
 
     fn verify_acceptor_proof(
         &self,
-        proof: &OpRandProof,
-    ) -> Result<bool, crate::errors::ProverError> {
-        verify_ultra_honk(proof.proof().to_vec(), proof.vk().to_vec())
-            .map_err(|e| crate::errors::ProverError::ProofVerificationError(e.to_string()))
+        _acceptor_public_key_hash: [u8; 20],
+        _third_rank_commitments: [ThirdRankCommitment; 2],
+        op_rand_proof: &OpRandProof,
+    ) -> Result<(), crate::errors::ProverError> {
+        // TODO: Add verification of public inputs
+        let verdict =
+            verify_ultra_honk(op_rand_proof.proof().to_vec(), op_rand_proof.vk().to_vec())
+                .map_err(|e| crate::errors::ProverError::ProofVerificationError(e.to_string()))?;
+
+        if !verdict {
+            return Err(crate::errors::ProverError::InvalidProof);
+        }
+
+        Ok(())
     }
 }
 
-/// Helper function to convert bytes to individual string values
 fn bytes_to_string_array(bytes: &[u8]) -> Vec<String> {
     bytes.iter().map(|b| b.to_string()).collect()
 }

@@ -20,7 +20,13 @@ pub trait OpRandProver {
         challenger_public_key_hash: [u8; 20],
     ) -> Result<OpRandProof, ProverError>;
     /// Used by the acceptor to verify the proof from the challenger
-    fn verify_challenger_proof(&self, proof: &OpRandProof) -> Result<bool, ProverError>;
+    fn verify_challenger_proof(
+        &self,
+        third_rank_commitments: [ThirdRankCommitment; 2],
+        challenger_public_key: &secp256k1::PublicKey,
+        challenger_public_key_hash: [u8; 20],
+        proof: &OpRandProof,
+    ) -> Result<(), ProverError>;
 
     /// Used by the acceptor to generate a proof for the challenger
     fn generate_acceptor_proof(
@@ -31,5 +37,10 @@ pub trait OpRandProver {
         third_rank_commitments: [ThirdRankCommitment; 2],
     ) -> Result<OpRandProof, ProverError>;
     /// Used by the challenger to verify the proof from the acceptor
-    fn verify_acceptor_proof(&self, proof: &OpRandProof) -> Result<bool, ProverError>;
+    fn verify_acceptor_proof(
+        &self,
+        acceptor_public_key_hash: [u8; 20],
+        third_rank_commitments: [ThirdRankCommitment; 2],
+        proof: &OpRandProof,
+    ) -> Result<(), ProverError>;
 }

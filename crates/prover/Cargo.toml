@@ -9,3 +9,4 @@ noir_rs = { workspace = true, features = ["barretenberg"] }
 lazy_static = { workspace = true }
 serde_json = { workspace = true }
 hex = { workspace = true }
+serde = { workspace = true }
