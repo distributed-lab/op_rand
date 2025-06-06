@@ -13,7 +13,7 @@ use crate::transactions::{
 /// Intended usage flow:
 /// - Create new `TransactionBuilder` with `TransactionBuilder::from_pubkey(PublicKey)`
 /// - Store deposit tx input from which to take coins for game transactions, you could either
-/// build a new tx with `build_deposit_tx` or just set existing TxIn with `set_deposit_txin`
+/// build a new tx with `build_and_set_deposit_tx` or just set existing TxIn with `set_deposit_txin`
 /// - Build initial transaction or closing partially signed transaction
 pub struct TransactionBuilder {
     public_key: PublicKey,
@@ -25,13 +25,14 @@ impl TransactionBuilder {
         TransactionBuilder { public_key, deposit_txin: None }
     }
 
-    /// Sets TxIn as deposit input for initial and closing transactions
+    /// Sets TxIn as deposit input for initial and closing transactions.
+    /// Overrides any stored value as well
     pub fn set_deposit_txin(&mut self, txin: TxIn) {
         self.deposit_txin = Some(txin);
     }
 
     /// Builds deposit transaction from inputs, stores corresponding `TxIn` to `TransactionBuilder`
-    /// and returns built deposit transaction
+    /// (overriding previous value if stored) and returns built deposit transaction
     pub fn build_and_set_deposit_tx(
         &mut self,
         input: Vec<TxIn>,
@@ -54,7 +55,7 @@ impl TransactionBuilder {
     }
 
     /// Builds initial transaction and returns it.
-    /// Needs special tweak value to combine with challenger's public key
+    /// Needs special tweak value to combine with Challenger's public key
     pub fn build_initial_tx(
         &self,
         tweak_value: &PublicKey,
@@ -79,8 +80,8 @@ impl TransactionBuilder {
     }
 
     /// Builds closing transaction as PSBT and returns it. Needs an input from initial tx
-    /// and challenger's public key, which must be provided by the challenger, as well as
-    /// tweak value to combine with accepter's public key
+    /// and Challenger's public key, which must be provided by the Challenger, as well as
+    /// tweak value to combine with Acceptor's public key
     pub fn build_closing_tx(
         &self,
         input_from_initial: TxIn,

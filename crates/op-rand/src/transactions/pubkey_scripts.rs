@@ -20,8 +20,8 @@ pub fn create_p2wpkh_script(
 }
 
 /// Creates PubKeyScript for initial TX output
-/// - `pubkey_a` refers to PubKey of the first counterparty
-/// - `pubkey_a1` refers to chosen by 1st CP random value, called A in the paper
+/// - `pubkey_a` refers to PubKey of the Challenger
+/// - `pubkey_a1` refers to chosen by Challenger tweak value
 pub fn create_init_output_script(
     pubkey_a: &PublicKey,
     pubkey_a1: &PublicKey,
@@ -32,9 +32,9 @@ pub fn create_init_output_script(
 }
 
 /// Create PubKeyScript for closing TX output
-/// - `pubkey_a` refers to PubKey of the first counterparty
-/// - `pubkey_b` refers to PubKey of the second counterparty
-/// - `pubkey_h1` refers to chosen by 2nd CP random value, called H1 in the paper
+/// - `pubkey_a` refers to PubKey of the Challenger
+/// - `pubkey_b` refers to PubKey of the Acceptor
+/// - `pubkey_h1` refers to chosen by Acceptor tweak value
 pub fn create_close_output_script(
     pubkey_a: &PublicKey,
     pubkey_b: &PublicKey,
@@ -49,20 +49,22 @@ pub fn create_close_output_script(
     Ok(ScriptBuf::new_p2wsh(&witness_script.wscript_hash()))
 }
 
+/// Creates custom script for closing transaction output:  
+/// ```_
+/// OP_IF
+///     <P_b + H1> OP_CHECKSIG
+/// OP_ELSE  
+///     <LT> OP_CHECKLOCKTIMEVERIFY OP_DROP  
+///     <P_a> OP_CHECKSIG  
+/// OP_ENDIF
 fn create_closing_witness_script(
     pubkey_a: &PublicKey,
-    combined_pubkey_b: &PublicKey,
+    tweaked_pubkey_b: &PublicKey,
     lock_time: LockTime,
 ) -> ScriptBuf {
-    // OP_IF
-    //     <P_b + H1> OP_CHECKSIG
-    // OP_ELSE
-    //     <LT> OP_CHECKLOCKTIMEVERIFY OP_DROP
-    //     <P_a> OP_CHECKSIG
-    // OP_ENDIF
     script::Builder::new()
         .push_opcode(opcodes::all::OP_IF)
-        .push_key(combined_pubkey_b)
+        .push_key(tweaked_pubkey_b)
         .push_opcode(opcodes::all::OP_CHECKSIG)
         .push_opcode(opcodes::all::OP_ELSE)
         .push_lock_time(lock_time)

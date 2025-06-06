@@ -33,7 +33,7 @@ impl TransactionSigner {
         let public_key = self.private_key.public_key(&self.secp);
         let script_code = ScriptBuf::new_p2pkh(&public_key.pubkey_hash());
 
-        let mut sighasher = SighashCache::new(tx.clone());
+        let mut sighasher = SighashCache::new(&*tx);
         let sighash = sighasher.p2wpkh_signature_hash(
             input_index, &script_code, txout.value, EcdsaSighashType::All,
         )?;
@@ -90,7 +90,7 @@ impl TransactionSigner {
         Ok(())
     }
 
-    /// Signs multiple inputs with the same public and private key,
+    /// Signs multiple inputs with the same public and private keys,
     /// assuming the performer uses only outputs owned by the same public key
     pub fn sign_multi_input(
         &self,
