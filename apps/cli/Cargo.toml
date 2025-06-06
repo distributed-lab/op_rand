@@ -1,0 +1,9 @@
+[package]
+name = "op-rand-cli"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+op-rand-prover = { workspace = true }
+secp256k1 = { workspace = true, features = ["std"] }
+rand = { workspace = true }

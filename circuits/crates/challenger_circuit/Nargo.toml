@@ -1,0 +1,7 @@
+[package]
+name = "challenger_circuit"
+type = "bin"
+authors = [""]
+
+[dependencies]
+common = { path = "../common" }
