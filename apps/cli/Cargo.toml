@@ -7,3 +7,18 @@ edition = "2024"
 op-rand-prover = { workspace = true }
 secp256k1 = { workspace = true, features = ["std"] }
 rand = { workspace = true }
+eyre = { workspace = true }
+bitcoin = { workspace = true, features = ["serde"] }
+serde = { workspace = true }
+config = { version = "0.15.11" }
+clap = { version = "4.3.23", features = ["derive"] }
+clap-verbosity = { version = "2.1.0" }
+tracing-log = "0.2.0"
+indicatif = { version = "0.17.8" }
+tracing-subscriber = { version = "0.3", features = [
+    "fmt",
+    "ansi",
+    "tracing-log",
+] }
+tokio = { version = "1.45.1", features = ["full"] }
+color-eyre = { version = "0.6.2" }
