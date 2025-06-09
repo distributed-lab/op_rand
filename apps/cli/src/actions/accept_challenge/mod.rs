@@ -57,10 +57,16 @@ pub async fn run(
 
     let sig = ctx.sign_ecdsa(message, &sk);
 
-    prover
-        .setup_acceptor_circuit()
-        .expect("Failed to setup acceptor circuit");
-
+    let pb = setup_progress_bar("Setting up acceptor circuit...".into());
+    let prover_clone = prover.clone();
+    tokio::task::spawn_blocking(move || {
+        prover_clone
+            .setup_acceptor_circuit()
+            .expect("Failed to setup acceptor circuit")
+    })
+    .await
+    .expect("Failed to spawn blocking task");
+    pb.finish_with_message("Acceptor circuit is set up");
     let pb = setup_progress_bar("Generating acceptor proof...".into());
     let proof = prover
         .generate_acceptor_proof(

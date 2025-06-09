@@ -6,6 +6,7 @@ use clap::Args;
 use color_eyre::eyre;
 use op_rand_prover::{BarretenbergProver, Commitments, OpRandProver};
 use secp256k1::Secp256k1;
+use tokio;
 
 use crate::{
     actions::parse_outpoint,
@@ -35,13 +36,19 @@ pub async fn run(
     }: CreateChallengeArgs,
     mut ctx: Context,
 ) -> eyre::Result<()> {
+    println!("Creating challenge");
     let prover = BarretenbergProver::default();
 
-    prover
-        .setup_challenger_circuit()
-        .expect("Failed to setup challenger circuit");
-
-    println!("Challenger circuit is set up");
+    let pb = setup_progress_bar("Setting up challenger circuit...".into());
+    let prover_clone = prover.clone();
+    tokio::task::spawn_blocking(move || {
+        prover_clone
+            .setup_challenger_circuit()
+            .expect("Failed to setup challenger circuit")
+    })
+    .await
+    .expect("Failed to spawn blocking task");
+    pb.finish_with_message("Challenger circuit is set up");
 
     let ctx = Secp256k1::new();
     let (sk, pk) = ctx.generate_keypair(&mut rand::rng());
