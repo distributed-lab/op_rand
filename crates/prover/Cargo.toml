@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-secp256k1 = { workspace = true, features = ["hashes", "rand"] }
+bitcoin = { workspace = true, features = ["serde", "rand"] }
 noir_rs = { workspace = true, features = ["barretenberg"] }
 lazy_static = { workspace = true }
 serde_json = { workspace = true }

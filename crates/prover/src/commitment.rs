@@ -1,7 +1,12 @@
-use secp256k1::{
-    PublicKey, Secp256k1, SecretKey, Signing,
-    hashes::{Hash, sha256},
-    rand,
+use std::str::FromStr;
+
+use bitcoin::{
+    key::Secp256k1,
+    secp256k1::{
+        self, PublicKey, SecretKey, Signing,
+        hashes::{Hash, sha256},
+        rand,
+    },
 };
 
 use rand::seq::IteratorRandom;
@@ -31,6 +36,14 @@ impl ThirdRankCommitment {
     }
 }
 
+impl FromStr for ThirdRankCommitment {
+    type Err = secp256k1::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let public_key = PublicKey::from_str(s)?;
+        Ok(ThirdRankCommitment { public_key })
+    }
+}
 /// Second rank commitments are intermediate and are only used to generate the third rank commitments.
 #[derive(Debug, Clone)]
 pub struct Commitments {

@@ -1,3 +1,4 @@
+use bitcoin::secp256k1;
 use secp256k1::{PublicKey, ecdsa};
 
 use crate::{

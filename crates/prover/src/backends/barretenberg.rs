@@ -1,3 +1,4 @@
+use bitcoin::secp256k1;
 use noir_rs::barretenberg::srs::setup_srs;
 use noir_rs::barretenberg::{prove::prove_ultra_honk, verify::verify_ultra_honk};
 use noir_rs::witness::from_vec_str_to_witness_map;

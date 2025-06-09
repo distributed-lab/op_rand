@@ -5,13 +5,19 @@ use crate::context::Context;
 
 #[derive(Args, Debug)]
 pub struct CompleteChallengeArgs {
-    /// Proof
-    #[clap(long, short)]
-    pub proof: String,
+    /// Path to the challenge JSON file
+    #[clap(long, default_value = "challenge.json")]
+    pub challenge_file: String,
+    /// Path to the acceptor JSON file
+    #[clap(long, default_value = "acceptor.json")]
+    pub acceptor_file: String,
 }
 
 pub async fn run(
-    CompleteChallengeArgs { proof }: CompleteChallengeArgs,
+    CompleteChallengeArgs {
+        challenge_file,
+        acceptor_file,
+    }: CompleteChallengeArgs,
     mut ctx: Context,
 ) -> eyre::Result<()> {
     Ok(())

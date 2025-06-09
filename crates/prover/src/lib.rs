@@ -7,4 +7,4 @@ mod traits;
 pub use backends::BarretenbergProver;
 pub use commitment::*;
 pub use errors::ProverError;
-pub use traits::OpRandProver;
+pub use traits::{OpRandProof, OpRandProver};
