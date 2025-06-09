@@ -1,5 +1,5 @@
 use bitcoin::{
-    OutPoint,
+    Address, CompressedPublicKey, OutPoint,
     hashes::{Hash, ripemd160, sha256},
 };
 use clap::Args;
@@ -7,17 +7,13 @@ use color_eyre::eyre;
 use op_rand_prover::{BarretenbergProver, Commitments, OpRandProver};
 use secp256k1::{Message, Secp256k1};
 
+use crate::util::parse_outpoint;
 use crate::{
-    actions::parse_outpoint,
     context::{Context, setup_progress_bar},
+    util::select_utxos,
 };
-
 #[derive(Args, Debug)]
 pub struct AcceptChallengeArgs {
-    /// Utxos to spend
-    #[clap(long, short, num_args = 1.., value_parser = parse_outpoint)]
-    pub utxos: Vec<OutPoint>,
-
     /// Challenge outpoint
     #[clap(long, short, num_args = 1.., value_parser = parse_outpoint)]
     pub outpoint: OutPoint,
@@ -28,13 +24,20 @@ pub struct AcceptChallengeArgs {
 }
 
 pub async fn run(
-    AcceptChallengeArgs {
-        utxos,
-        outpoint,
-        amount,
-    }: AcceptChallengeArgs,
+    AcceptChallengeArgs { outpoint, amount }: AcceptChallengeArgs,
     mut ctx: Context,
 ) -> eyre::Result<()> {
+    let cfg = ctx.config()?;
+    let private_key = cfg.private_key;
+    let secp = ctx.secp_ctx();
+    let address = Address::p2wpkh(
+        &CompressedPublicKey::from_private_key(secp, &private_key).unwrap(),
+        cfg.network,
+    );
+
+    let esplora_client = ctx.esplora_client()?;
+    let utxos = esplora_client.get_utxos(&address.to_string()).await?;
+    let selected_utxos = select_utxos(utxos, amount)?;
     let prover = BarretenbergProver::default();
 
     let ctx = Secp256k1::new();

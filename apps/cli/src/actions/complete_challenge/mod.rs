@@ -1,8 +1,7 @@
-use bitcoin::OutPoint;
 use clap::Args;
 use color_eyre::eyre;
 
-use crate::{actions::parse_outpoint, context::Context};
+use crate::context::Context;
 
 #[derive(Args, Debug)]
 pub struct CompleteChallengeArgs {

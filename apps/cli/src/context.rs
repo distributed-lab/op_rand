@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use crate::config::Config;
+use crate::{config::Config, esplora::EsploraClient};
 use bitcoin::secp256k1::{All, Secp256k1};
 use color_eyre::{eyre, eyre::Context as _};
 use indicatif::{ProgressBar, ProgressStyle};
@@ -18,6 +18,9 @@ pub struct Context {
 
     /// Loaded configuration file.
     config: Option<Config>,
+
+    /// Esplora client
+    esplora_client: Option<EsploraClient>,
 }
 
 impl Context {
@@ -28,6 +31,7 @@ impl Context {
             config_path: config,
             secp_ctx,
             config: None,
+            esplora_client: None,
         }
     }
 
@@ -36,8 +40,7 @@ impl Context {
             return Ok(config.clone());
         }
 
-        let cfg: Config =
-            Config::from_path(self.config_path.clone()).wrap_err("Failed to load config")?;
+        let cfg = Config::from_path(self.config_path.clone()).wrap_err("Failed to load config")?;
 
         self.config = Some(cfg.clone());
 
@@ -46,6 +49,18 @@ impl Context {
 
     pub fn secp_ctx(&self) -> &Secp256k1<All> {
         &self.secp_ctx
+    }
+
+    pub fn esplora_client(&mut self) -> eyre::Result<EsploraClient> {
+        if let Some(client) = &self.esplora_client {
+            return Ok(client.clone());
+        }
+
+        let cfg = Config::from_path(self.config_path.clone()).wrap_err("Failed to load config")?;
+        let client = EsploraClient::new(cfg.esplora_url);
+        self.esplora_client = Some(client.clone());
+
+        Ok(client)
     }
 }
 

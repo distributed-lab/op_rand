@@ -61,7 +61,3 @@ async fn execute_command(command: Commands, context: Context) -> eyre::Result<()
         Cmd::CompleteChallenge(cmd) => complete_challenge::run(cmd, context).await,
     }
 }
-
-fn parse_outpoint(s: &str) -> Result<OutPoint, String> {
-    OutPoint::from_str(s).map_err(|e| e.to_string())
-}
