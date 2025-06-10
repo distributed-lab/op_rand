@@ -1,5 +1,6 @@
 [workspace]
-members = ["crates/op-rand"]
+resolver = "2"
+members = ["apps/cli", "crates/op-rand", "crates/prover"]
 
 [workspace.package]
 name = "op-rand"
@@ -7,8 +8,18 @@ version = "0.1.0"
 edition = "2024"
 
 [workspace.dependencies]
+op-rand-prover = { path = "crates/prover" }
+
 bitcoin = { version = "0.32.6", default-features = false }
-tokio = { version = "1.45.1", default-features = false }
+secp256k1 = { version = "0.31.0", default-features = false }
+rand = { version = "0.9.1", default-features = false }
 eyre = { version = "0.6.12", default-features = false }
 serde = { version = "1.0.219", default-features = false }
 serde_json = { version = "1.0.140", default-features = false }
+lazy_static = { version = "1.5.0", default-features = false }
+hex = { version = "0.4.3", default-features = false }
+
+# ZK 
+noir_rs = { git = "https://github.com/rarimo/noir_rs.git", branch = "v1.0.3", features = [
+    "barretenberg",
+] }

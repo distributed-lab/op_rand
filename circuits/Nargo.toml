@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "crates/common",
+    "crates/challenger_circuit",
+    "crates/acceptor_circuit",
+]

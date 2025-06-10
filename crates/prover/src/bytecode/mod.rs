@@ -1,0 +1,44 @@
+use lazy_static::lazy_static;
+use serde_json::Value;
+use std::fs;
+
+pub struct CircuitMetadata {
+    pub bytecode: String,
+}
+
+impl CircuitMetadata {
+    pub fn from_file(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let content = fs::read_to_string(path)?;
+        let json: Value = serde_json::from_str(&content)?;
+
+        let bytecode = json
+            .get("bytecode")
+            .and_then(|v| v.as_str())
+            .ok_or("Missing or invalid 'bytecode' field in JSON")?;
+
+        Ok(Self {
+            bytecode: bytecode.to_string(),
+        })
+    }
+}
+
+lazy_static! {
+    pub static ref CHALLENGER_CIRCUIT_BYTECODE: String = {
+        CircuitMetadata::from_file(
+            "circuits/crates/challenger_circuit/target/challenger_circuit.json",
+        )
+        .map(|metadata| metadata.bytecode)
+        .unwrap_or_else(|e| {
+            eprintln!("Failed to load challenger circuit bytecode: {}", e);
+            String::new()
+        })
+    };
+    pub static ref ACCEPTOR_CIRCUIT_BYTECODE: String = {
+        CircuitMetadata::from_file("circuits/crates/acceptor_circuit/target/acceptor_circuit.json")
+            .map(|metadata| metadata.bytecode)
+            .unwrap_or_else(|e| {
+                eprintln!("Failed to load acceptor circuit bytecode: {}", e);
+                String::new()
+            })
+    };
+}

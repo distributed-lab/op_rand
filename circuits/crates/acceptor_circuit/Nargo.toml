@@ -1,0 +1,8 @@
+[package]
+name = "acceptor_circuit"
+type = "bin"
+authors = [""]
+
+[dependencies]
+common = { path = "../common" }
+ripemd160 = { tag = "v0.0.1", git = "https://github.com/distributed-lab/noir-ripemd160" }
