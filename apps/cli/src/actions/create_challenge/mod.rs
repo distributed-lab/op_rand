@@ -101,12 +101,10 @@ pub async fn run(
             .setup_challenger_circuit()
             .expect("Failed to setup challenger circuit")
     })
-    .await
-    .expect("Failed to spawn blocking task");
+    .await?;
     pb.finish_with_message("Challenger circuit is set up");
 
-    let commitments =
-        Commitments::generate(secp, &mut thread_rng()).expect("Failed to generate commitments");
+    let commitments = Commitments::generate(secp, &mut thread_rng())?;
 
     let first_rank_commitments = commitments.first_rank_commitments();
     let random_first_rank_commitment = commitments
@@ -114,9 +112,7 @@ pub async fn run(
         .ok_or_eyre("No first rank commitments available")?;
 
     let (_commitment_sk, commitment_pk) = random_first_rank_commitment.inner();
-    let tweaked_pk = public_key
-        .combine(&commitment_pk)
-        .expect("Failed to combine keys");
+    let tweaked_pk = public_key.combine(&commitment_pk)?;
 
     let third_rank_commitments = commitments.third_rank_commitments();
 
@@ -124,14 +120,12 @@ pub async fn run(
     let ripemd160_hash = ripemd160::Hash::hash(sha256_hash.as_byte_array());
 
     let pb = setup_progress_bar("Generating the challenger proof...".into());
-    let proof = prover
-        .generate_challenger_proof(
-            first_rank_commitments.to_owned(),
-            third_rank_commitments.to_owned(),
-            &public_key,
-            ripemd160_hash.to_byte_array(),
-        )
-        .expect("Failed to generate challenger proof");
+    let proof = prover.generate_challenger_proof(
+        first_rank_commitments.to_owned(),
+        third_rank_commitments.to_owned(),
+        &public_key,
+        ripemd160_hash.to_byte_array(),
+    )?;
     pb.finish_with_message("Challenger proof generated");
 
     let inputs_sum = selected_utxos.iter().map(|utxo| utxo.value).sum::<u64>();
@@ -144,27 +138,21 @@ pub async fn run(
     let prevouts = selected_utxos
         .iter()
         .map(|utxo| {
-            (
-                OutPoint::new(
-                    Txid::from_str(&utxo.txid).expect("Failed to parse txid"),
-                    utxo.vout,
-                ),
+            Ok((
+                OutPoint::new(Txid::from_str(&utxo.txid)?, utxo.vout),
                 Amount::from_sat(utxo.value),
-            )
+            ))
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>, eyre::Error>>()?;
 
     let pb = setup_progress_bar("Creating a deposit transaction...".into());
-    let deposit_tx = transaction_builder
-        .build_deposit_transaction(
-            random_first_rank_commitment.to_owned(),
-            prevouts,
-            Amount::from_sat(amount),
-            change,
-            change_pubkey
-                .map(|pk| PublicKey::from_str(&pk).expect("Failed to parse change pubkey")),
-        )
-        .expect("Failed to create deposit transaction");
+    let deposit_tx = transaction_builder.build_deposit_transaction(
+        random_first_rank_commitment.to_owned(),
+        prevouts,
+        Amount::from_sat(amount),
+        change,
+        change_pubkey.and_then(|pk| PublicKey::from_str(&pk).ok()),
+    )?;
 
     pb.finish_with_message("Deposit transaction created");
 
@@ -189,9 +177,7 @@ pub async fn run(
     fs::write(&public_output, json_output)?;
 
     let mut tx_bytes = Vec::new();
-    deposit_tx
-        .consensus_encode(&mut tx_bytes)
-        .expect("Failed to encode deposit transaction");
+    deposit_tx.consensus_encode(&mut tx_bytes)?;
 
     let private_challenge_output = PrivateChallengerData {
         id,

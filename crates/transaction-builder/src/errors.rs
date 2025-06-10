@@ -2,59 +2,35 @@ use bitcoin::{
     key::UncompressedPublicKeyError, psbt::Error as PsbtError, secp256k1::Error as Secp256k1Error,
     sighash::P2wpkhError,
 };
+use miniscript::psbt::SighashError;
 use std::fmt;
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum TransactionError {
+    #[error("Uncompressed public key error: {0}")]
     UncompressedPublicKey(UncompressedPublicKeyError),
+    #[error("P2WPKH error: {0}")]
     P2wpkh(P2wpkhError),
+    #[error("Secp256k1 error: {0}")]
     Secp256k1(Secp256k1Error),
+    #[error("PSBT error: {0}")]
     Psbt(PsbtError),
+    #[error("Sighash error: {0}")]
+    Sighash(SighashError),
+    #[error("Amounts and scripts must be of same length.")]
     AmountsScriptsLengthMismatch,
+    #[error("Inputs and outputs must be of same length.")]
     InputsOutputsLengthMismatch,
-    NoDepositTxStored,
+    #[error("Transaction type mismatch.")]
     TransactionTypeMismatch,
+    #[error("Input index out of bounds.")]
     InputIndexOutOfBounds,
+    #[error("Failed to extract transaction from PSBT.")]
     ExtractTransactionFailed,
+    #[error("Failed to finalize PSBT: {0:?}")]
     PsbtFinalizationFailed(Vec<miniscript::psbt::Error>),
-}
-
-impl fmt::Display for TransactionError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            TransactionError::UncompressedPublicKey(ref err) => {
-                write!(f, "Bictoin Uncompressed public key error: {}", err)
-            }
-            TransactionError::P2wpkh(ref err) => {
-                write!(f, "Bitcoin P2WPKH error: {}", err)
-            }
-            TransactionError::Secp256k1(ref err) => {
-                f.write_str(&format!("Bitcoin Secp256k1 error: {}", err))
-            }
-            TransactionError::Psbt(ref err) => f.write_str(&format!("Bitcoin PSBT error: {}", err)),
-            TransactionError::NoDepositTxStored => {
-                f.write_str("TransactionBuilder must store some deposit transaction.")
-            }
-            TransactionError::AmountsScriptsLengthMismatch => {
-                f.write_str("Amounts and scripts must be of same length.")
-            }
-            TransactionError::InputsOutputsLengthMismatch => {
-                f.write_str("Inputs and outputs must be of same length.")
-            }
-            TransactionError::TransactionTypeMismatch => {
-                f.write_str("Transaction is a different type from expected.")
-            }
-            TransactionError::InputIndexOutOfBounds => {
-                f.write_str("Provided input index is out of bounds for this transaction.")
-            }
-            TransactionError::ExtractTransactionFailed => {
-                f.write_str("Failed to extract transaction from PSBT.")
-            }
-            TransactionError::PsbtFinalizationFailed(ref errors) => {
-                f.write_str(&format!("Failed to finalize PSBT: {:?}", errors))
-            }
-        }
-    }
+    #[error("No deposit transaction stored.")]
+    NoDepositTxStored,
 }
 
 impl From<UncompressedPublicKeyError> for TransactionError {
@@ -84,5 +60,11 @@ impl From<PsbtError> for TransactionError {
 impl From<Vec<miniscript::psbt::Error>> for TransactionError {
     fn from(errors: Vec<miniscript::psbt::Error>) -> Self {
         TransactionError::PsbtFinalizationFailed(errors)
+    }
+}
+
+impl From<SighashError> for TransactionError {
+    fn from(err: SighashError) -> Self {
+        TransactionError::Sighash(err)
     }
 }

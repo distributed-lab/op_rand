@@ -177,7 +177,7 @@ impl<C: Signing + Verification> TransactionBuilder<C> {
 
     /// Signs single input inside `Transaction` by its index
     /// - `txout` refers to output being spent by this input
-    pub fn sign_single_input(
+    fn sign_single_input(
         &self,
         tx: &mut Transaction,
         input_index: usize,
@@ -214,7 +214,7 @@ impl<C: Signing + Verification> TransactionBuilder<C> {
 
     /// Signs single input inside `Psbt` by its index
     /// - `txout` refers to output being spent by this input
-    pub fn sign_psbt_input(
+    fn sign_psbt_input(
         &self,
         psbt: &mut Psbt,
         input_index: usize,
@@ -266,7 +266,7 @@ impl<C: Signing + Verification> TransactionBuilder<C> {
 
     /// Signs multiple inputs with the same public and private keys,
     /// assuming the performer uses only outputs owned by the same public key
-    pub fn sign_transaction(
+    fn sign_transaction(
         &self,
         tx: &mut Transaction,
         amounts: Vec<Amount>,

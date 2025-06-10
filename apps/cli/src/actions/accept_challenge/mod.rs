@@ -30,6 +30,10 @@ pub struct AcceptChallengeArgs {
     /// Number of the commitment to accept
     #[clap(long)]
     pub selected_commitment: u32,
+
+    /// Locktime
+    #[clap(long)]
+    pub locktime: u32,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -47,6 +51,7 @@ pub async fn run(
         challenge_file,
         output,
         selected_commitment,
+        locktime,
     }: AcceptChallengeArgs,
     mut ctx: Context,
 ) -> eyre::Result<()> {
@@ -61,36 +66,31 @@ pub async fn run(
             .setup_challenger_circuit()
             .expect("Failed to setup challenger circuit")
     })
-    .await
-    .expect("Failed to spawn blocking task");
+    .await?;
     pb.finish_with_message("Challenger circuit is set up");
 
     let commitments: [ThirdRankCommitment; 2] = challenge_data
         .third_rank_commitments
         .iter()
-        .map(|s| ThirdRankCommitment::from_str(s).expect("Failed to parse commitment"))
-        .collect::<Vec<_>>()
+        .map(|s| ThirdRankCommitment::from_str(s))
+        .collect::<Result<Vec<_>, _>>()?
         .try_into()
-        .expect("Failed to convert commitments to array");
+        .map_err(|_| eyre::eyre!("Expected exactly 2 commitments"))?;
 
-    let challenger_pubkey = PublicKey::from_str(&challenge_data.challenger_pubkey)
-        .expect("Failed to parse challenger public key");
-    let challenger_pubkey_hash = hex::decode(&challenge_data.challenger_pubkey_hash)
-        .expect("Failed to decode challenger public key hash")
+    let challenger_pubkey = PublicKey::from_str(&challenge_data.challenger_pubkey)?;
+    let challenger_pubkey_hash = hex::decode(&challenge_data.challenger_pubkey_hash)?
         .try_into()
-        .expect("Failed to convert challenger public key hash to array");
-    let proof = hex::decode(&challenge_data.proof).expect("Failed to decode proof");
-    let vk = hex::decode(&challenge_data.vk).expect("Failed to decode vk");
+        .map_err(|_| eyre::eyre!("Failed to convert challenger public key hash to array"))?;
+    let proof = hex::decode(&challenge_data.proof)?;
+    let vk = hex::decode(&challenge_data.vk)?;
     let proof_data = OpRandProof::new(proof, vk);
 
-    prover
-        .verify_challenger_proof(
-            commitments.clone(),
-            &challenger_pubkey,
-            challenger_pubkey_hash,
-            &proof_data,
-        )
-        .expect("Invalid challenger proof");
+    prover.verify_challenger_proof(
+        commitments.clone(),
+        &challenger_pubkey,
+        challenger_pubkey_hash,
+        &proof_data,
+    )?;
 
     let cfg = ctx.config()?;
     let private_key = cfg.private_key;
@@ -118,42 +118,32 @@ pub async fn run(
     let prevouts = selected_utxos
         .iter()
         .map(|utxo| {
-            (
-                OutPoint::new(
-                    Txid::from_str(&utxo.txid).expect("Failed to parse txid"),
-                    utxo.vout,
-                ),
+            Ok((
+                OutPoint::new(Txid::from_str(&utxo.txid)?, utxo.vout),
                 Amount::from_sat(utxo.value),
-            )
+            ))
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>, eyre::Error>>()?;
 
-    let psbt = tx_builder
-        .build_challenge_tx(
-            &challenger_pubkey.into(),
-            challenge_data.deposit_outpoint,
-            selected_commitment.to_owned(),
-            LockTime::Blocks(
-                Height::from_consensus(100).expect("Failed to convert height to consensus"),
-            ),
-            Amount::from_sat(challenge_data.amount),
-            prevouts,
-            change,
-            None,
-        )
-        .expect("Failed to build challenge transaction");
+    let psbt = tx_builder.build_challenge_tx(
+        &challenger_pubkey.into(),
+        challenge_data.deposit_outpoint,
+        selected_commitment.to_owned(),
+        LockTime::Blocks(Height::from_consensus(locktime)?),
+        Amount::from_sat(challenge_data.amount),
+        prevouts,
+        change,
+        None,
+    )?;
 
-    let pk_combined = public_key
-        .inner
-        .combine(&selected_commitment.inner())
-        .expect("Failed to combine keys");
+    let pk_combined = public_key.inner.combine(&selected_commitment.inner())?;
 
     let sha256_hash = sha256::Hash::hash(&pk_combined.serialize());
     let ripemd160_hash = ripemd160::Hash::hash(sha256_hash.as_byte_array());
 
     let message =
         Message::from_digest(sha256::Hash::hash(ripemd160_hash.as_byte_array()).to_byte_array());
-    let sk = SecretKey::from_slice(&private_key.to_bytes()).expect("Failed to parse private key");
+    let sk = SecretKey::from_slice(&private_key.to_bytes())?;
 
     let sig = secp.sign_ecdsa(&message, &sk);
 
@@ -164,18 +154,15 @@ pub async fn run(
             .setup_acceptor_circuit()
             .expect("Failed to setup acceptor circuit")
     })
-    .await
-    .expect("Failed to spawn blocking task");
+    .await?;
     pb.finish_with_message("Acceptor circuit is set up");
     let pb = setup_progress_bar("Generating acceptor proof...".into());
-    let proof = prover
-        .generate_acceptor_proof(
-            &public_key.inner,
-            &sig,
-            ripemd160_hash.to_byte_array(),
-            commitments,
-        )
-        .expect("Failed to generate acceptor proof");
+    let proof = prover.generate_acceptor_proof(
+        &public_key.inner,
+        &sig,
+        ripemd160_hash.to_byte_array(),
+        commitments,
+    )?;
     pb.finish_with_message("Acceptor proof generated");
 
     let acceptor_output = AcceptorData {

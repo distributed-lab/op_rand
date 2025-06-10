@@ -7,3 +7,4 @@ edition = "2024"
 bitcoin = { workspace = true }
 miniscript = { workspace = true }
 op-rand-types = { workspace = true }
+thiserror = { workspace = true }

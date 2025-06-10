@@ -57,14 +57,14 @@ pub async fn run(
     let challenger_commitments = challenger_data
         .third_rank_commitments
         .iter()
-        .map(|s| ThirdRankCommitment::from_str(s).expect("Failed to parse commitment"))
-        .collect::<Vec<_>>();
+        .map(|s| ThirdRankCommitment::from_str(s))
+        .collect::<Result<Vec<_>, _>>()?;
 
     let acceptor_commitments = acceptor_data
         .third_rank_commitments
         .iter()
-        .map(|s| ThirdRankCommitment::from_str(s).expect("Failed to parse commitment"))
-        .collect::<Vec<_>>();
+        .map(|s| ThirdRankCommitment::from_str(s))
+        .collect::<Result<Vec<_>, _>>()?;
 
     ensure!(
         challenger_commitments
@@ -85,62 +85,51 @@ pub async fn run(
             .setup_acceptor_circuit()
             .expect("Failed to setup acceptor circuit")
     })
-    .await
-    .expect("Failed to spawn blocking task");
+    .await?;
     pb.finish_with_message("Acceptor circuit is set up");
 
-    prover
-        .verify_acceptor_proof(
-            acceptor_pubkey_hash
-                .try_into()
-                .expect("Failed to convert pubkey hash to array"),
-            challenger_commitments
-                .try_into()
-                .expect("Failed to convert commitments to array"),
-            &proof_data,
-        )
-        .expect("Failed to verify acceptor proof");
+    prover.verify_acceptor_proof(
+        acceptor_pubkey_hash
+            .try_into()
+            .map_err(|_| eyre::eyre!("Failed to convert pubkey hash to array"))?,
+        challenger_commitments
+            .try_into()
+            .map_err(|_| eyre::eyre!("Failed to convert commitments to array"))?,
+        &proof_data,
+    )?;
 
     // TODO: cosign the PSBT and broadcast the transaction
     let esplora_client = ctx.esplora_client()?;
     let transaction_builder = ctx.transaction_builder()?;
     let psbt_bytes = general_purpose::STANDARD.decode(&acceptor_data.psbt)?;
 
-    let psbt = Psbt::deserialize(&psbt_bytes).expect("Failed to deserialize PSBT");
+    let psbt = Psbt::deserialize(&psbt_bytes)?;
     let selected_first_rank_commitment =
-        FirstRankCommitment::from_str(&challenger_private_data.selected_first_rank_commitment)
-            .expect("Failed to parse first rank commitment");
+        FirstRankCommitment::from_str(&challenger_private_data.selected_first_rank_commitment)?;
 
-    let signed_challenge_transaction = transaction_builder
-        .complete_challenge_tx(
-            psbt,
-            Amount::from_sat(challenger_data.amount),
-            0,
-            selected_first_rank_commitment,
-        )
-        .expect("Failed to complete challenge transaction");
+    let signed_challenge_transaction = transaction_builder.complete_challenge_tx(
+        psbt,
+        Amount::from_sat(challenger_data.amount),
+        0,
+        selected_first_rank_commitment,
+    )?;
 
     let deposit_transaction = challenger_private_data.deposit_transaction;
     let mut challenge_transaction_bytes = Vec::new();
-    signed_challenge_transaction
-        .consensus_encode(&mut challenge_transaction_bytes)
-        .expect("Failed to encode challenge transaction");
+    signed_challenge_transaction.consensus_encode(&mut challenge_transaction_bytes)?;
     let challenge_transaction = hex::encode(challenge_transaction_bytes);
 
     esplora_client
         .broadcast_transaction(&deposit_transaction)
-        .await
-        .expect("Failed to broadcast deposit transaction");
+        .await?;
 
     esplora_client
         .broadcast_transaction(&challenge_transaction)
-        .await
-        .expect("Failed to broadcast challenge transaction");
+        .await?;
 
     println!(
-        "Challenge completed! Deposit transaction ID: {}, Challenge transaction ID: {}",
-        challenger_data.deposit_outpoint.txid,
-        signed_challenge_transaction.compute_txid()
+        "Challenge completed! Challenge transaction broadcasted: {}",
+        challenge_transaction
     );
 
     Ok(())
