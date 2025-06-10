@@ -106,6 +106,7 @@ pub async fn run(
 
     let utxos = esplora_client.get_utxos(&address.to_string()).await?;
     let selected_utxos = select_utxos(utxos, challenge_data.amount + FEES)?;
+
     let selected_commitment = &commitments[selected_commitment as usize];
 
     let inputs_sum = selected_utxos.iter().map(|utxo| utxo.value).sum::<u64>();
@@ -131,7 +132,7 @@ pub async fn run(
     let psbt = tx_builder
         .build_challenge_tx(
             &challenger_pubkey.into(),
-            challenge_data.challenge_outpoint,
+            challenge_data.deposit_outpoint,
             selected_commitment.to_owned(),
             LockTime::Blocks(
                 Height::from_consensus(100).expect("Failed to convert height to consensus"),

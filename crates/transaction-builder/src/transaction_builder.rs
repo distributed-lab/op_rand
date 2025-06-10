@@ -1,12 +1,13 @@
 use bitcoin::{
     Amount, EcdsaSighashType, OutPoint, Psbt, PublicKey, ScriptBuf, Transaction, TxIn, TxOut,
     absolute::LockTime,
-    key::Secp256k1,
+    key::{Secp256k1, Verification},
     psbt::PsbtSighashType,
     secp256k1::{All, Context, Message, SecretKey, Signing},
     sighash::SighashCache,
     transaction::Version,
 };
+use miniscript::psbt::PsbtExt;
 use op_rand_types::{FirstRankCommitment, ThirdRankCommitment};
 
 use crate::{
@@ -43,7 +44,7 @@ impl From<&SecretKey> for TransactionBuilder<All> {
     }
 }
 
-impl<C: Signing> TransactionBuilder<C> {
+impl<C: Signing + Verification> TransactionBuilder<C> {
     pub fn new(secret_key: SecretKey, ctx: Secp256k1<C>) -> Self {
         TransactionBuilder { secret_key, ctx }
     }
@@ -172,6 +173,8 @@ impl<C: Signing> TransactionBuilder<C> {
             Some(deposit_signing_key),
         )?;
 
+        psbt.finalize_mut(&self.ctx)?;
+
         psbt.extract_tx()
             .map_err(TransactionError::ExtractTransactionFailed)
     }
@@ -229,7 +232,7 @@ impl<C: Signing> TransactionBuilder<C> {
 
         let secret_key = secret_key.unwrap_or(self.secret_key);
         let public_key = secret_key.public_key(&self.ctx);
-        let script_pubkey = ScriptBuf::new_p2wpkh(&PublicKey::new(public_key).wpubkey_hash()?);
+        let script_pubkey = create_p2wpkh_script(&public_key.into())?;
 
         let mut sighasher = SighashCache::new(&psbt.unsigned_tx);
         let sighash = sighasher.p2wpkh_signature_hash(

@@ -8,7 +8,7 @@ use crate::{
     context::{Context, setup_progress_bar},
 };
 use base64::{Engine as _, engine::general_purpose};
-use bitcoin::{Amount, Psbt};
+use bitcoin::{Amount, Psbt, consensus::Encodable};
 use clap::Args;
 use color_eyre::eyre;
 use color_eyre::eyre::ensure;
@@ -120,10 +120,26 @@ pub async fn run(
         )
         .expect("Failed to complete challenge transaction");
 
-    dbg!(&signed_challenge_transaction);
+    let deposit_transaction = challenger_private_data.deposit_transaction;
+    let mut challenge_transaction_bytes = Vec::new();
+    signed_challenge_transaction
+        .consensus_encode(&mut challenge_transaction_bytes)
+        .expect("Failed to encode challenge transaction");
+    let challenge_transaction = hex::encode(challenge_transaction_bytes);
+
+    esplora_client
+        .broadcast_transaction(&deposit_transaction)
+        .await
+        .expect("Failed to broadcast deposit transaction");
+
+    esplora_client
+        .broadcast_transaction(&challenge_transaction)
+        .await
+        .expect("Failed to broadcast challenge transaction");
 
     println!(
-        "Challenge completed! Transaction ID: {}",
+        "Challenge completed! Deposit transaction ID: {}, Challenge transaction ID: {}",
+        challenger_data.deposit_outpoint.txid,
         signed_challenge_transaction.compute_txid()
     );
 

@@ -18,6 +18,7 @@ pub enum TransactionError {
     TransactionTypeMismatch,
     InputIndexOutOfBounds,
     ExtractTransactionFailed(ExtractTxError),
+    PsbtFinalizationFailed(Vec<miniscript::psbt::Error>),
 }
 
 impl fmt::Display for TransactionError {
@@ -51,6 +52,9 @@ impl fmt::Display for TransactionError {
             TransactionError::ExtractTransactionFailed(ref err) => {
                 f.write_str(&format!("Failed to extract transaction from PSBT: {}", err))
             }
+            TransactionError::PsbtFinalizationFailed(ref errors) => {
+                f.write_str(&format!("Failed to finalize PSBT: {:?}", errors))
+            }
         }
     }
 }
@@ -82,5 +86,11 @@ impl From<PsbtError> for TransactionError {
 impl From<ExtractTxError> for TransactionError {
     fn from(err: ExtractTxError) -> Self {
         TransactionError::ExtractTransactionFailed(err)
+    }
+}
+
+impl From<Vec<miniscript::psbt::Error>> for TransactionError {
+    fn from(errors: Vec<miniscript::psbt::Error>) -> Self {
+        TransactionError::PsbtFinalizationFailed(errors)
     }
 }

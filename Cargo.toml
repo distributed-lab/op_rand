@@ -19,6 +19,7 @@ op-rand-types = { path = "crates/types" }
 
 # Cryptography
 bitcoin = { version = "0.32.6", default-features = false }
+miniscript = { version = "12.3.2" }
 noir_rs = { git = "https://github.com/rarimo/noir_rs.git", branch = "v1.0.3", features = [
     "barretenberg",
 ] }

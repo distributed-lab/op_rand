@@ -47,7 +47,7 @@ pub struct CreateChallengeArgs {
 pub struct PublicChallengerData {
     pub id: String,
     pub amount: u64,
-    pub challenge_outpoint: OutPoint,
+    pub deposit_outpoint: OutPoint,
     pub third_rank_commitments: [String; 2],
     pub challenger_pubkey: String,
     pub challenger_pubkey_hash: String,
@@ -59,7 +59,7 @@ pub struct PublicChallengerData {
 pub struct PrivateChallengerData {
     pub id: String,
     pub amount: u64,
-    pub challenge_transaction: String,
+    pub deposit_transaction: String,
     pub first_rank_commitments: [String; 2],
     pub selected_first_rank_commitment: String,
 }
@@ -175,7 +175,7 @@ pub async fn run(
     let public_challenge_output = PublicChallengerData {
         id: id.clone(),
         amount,
-        challenge_outpoint: OutPoint::new(deposit_tx.compute_txid(), 0),
+        deposit_outpoint: OutPoint::new(deposit_tx.compute_txid(), 0),
         third_rank_commitments: [
             hex::encode(third_rank_commitments[0].inner().serialize()),
             hex::encode(third_rank_commitments[1].inner().serialize()),
@@ -197,7 +197,7 @@ pub async fn run(
     let private_challenge_output = PrivateChallengerData {
         id,
         amount,
-        challenge_transaction: hex::encode(tx_bytes),
+        deposit_transaction: hex::encode(tx_bytes),
         first_rank_commitments: [
             hex::encode(first_rank_commitments[0].inner().0.secret_bytes()),
             hex::encode(first_rank_commitments[1].inner().0.secret_bytes()),
