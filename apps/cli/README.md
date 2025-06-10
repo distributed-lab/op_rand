@@ -49,12 +49,13 @@ Creates a new cryptographic challenge with hidden commitments and zero-knowledge
 **Usage:**
 
 ```bash
-op-rand-cli create-challenge --amount <SATOSHIS> [OPTIONS]
+op-rand-cli create-challenge --amount <AMOUNT> --locktime <LOCKTIME> [OPTIONS]
 ```
 
 **Arguments:**
 
-- `--amount <SATOSHIS>`: Challenge amount in satoshis (required)
+- `--amount <AMOUNT>`: Challenge amount in satoshis (required)
+- `--locktime <LOCKTIME>`: Locktime for the challenge transaction (required)
 - `--commitments-count <COUNT>`: Number of commitments to create (default: 2, currently only 2 is supported)
 - `--change-pubkey <PUBKEY>`: Public key for change output (optional)
 - `--public-output <PATH>`: Output file for public challenge data (default: `challenger.json`)
@@ -63,12 +64,13 @@ op-rand-cli create-challenge --amount <SATOSHIS> [OPTIONS]
 **Example:**
 
 ```bash
-# Create a challenge with 100,000 satoshis
-op-rand-cli create-challenge --amount 100000
+# Create a challenge with 100,000 satoshis and 144 block locktime
+op-rand-cli create-challenge --amount 100000 --locktime 144
 
 # Create a challenge with custom output files
 op-rand-cli create-challenge \
   --amount 50000 \
+  --locktime 288 \
   --public-output my_challenge.json \
   --private-output my_private_challenge.json
 ```
@@ -87,31 +89,28 @@ Accepts an existing challenge by generating acceptance proofs and creating a cha
 **Usage:**
 
 ```bash
-op-rand-cli accept-challenge --selected-commitment <INDEX> --locktime <BLOCKS> [OPTIONS]
+op-rand-cli accept-challenge --selected-commitment <INDEX> [OPTIONS]
 ```
 
 **Arguments:**
 
 - `--challenge-file <PATH>`: Path to challenge JSON file (default: `challenger.json`)
 - `--output <PATH>`: Output file for acceptor data (default: `acceptor.json`)
-- `--selected-commitment <INDEX>`: Index of commitment to accept (0 or 1)
-- `--locktime <BLOCKS>`: Locktime in blocks for the challenge transaction
+- `--selected-commitment <INDEX>`: Index of commitment to accept (0 or 1, required)
 
 **Example:**
 
 ```bash
-# Accept a challenge with commitment index 0 and 144 block locktime (1 day)
+# Accept a challenge with commitment index 0
 op-rand-cli accept-challenge \
   --challenge-file challenger.json \
-  --selected-commitment 0 \
-  --locktime 144
+  --selected-commitment 0
 
 # Accept with custom input/output files
 op-rand-cli accept-challenge \
   --challenge-file my_challenge.json \
   --output my_acceptor.json \
-  --selected-commitment 1 \
-  --locktime 288
+  --selected-commitment 1
 ```
 
 **Output:**
@@ -168,8 +167,9 @@ op-rand-cli try-spend --challenge-tx <TX_HEX> --challenger|--acceptor [OPTIONS]
 - `--challenge-tx <TX_HEX>`: Challenge transaction in hexadecimal format (required)
 - `--challenger`: Attempt to spend as the challenger (mutually exclusive with --acceptor)
 - `--acceptor`: Attempt to spend as the acceptor (mutually exclusive with --challenger)
-- `--recipient-address <ADDRESS>`: Bitcoin address to send funds to (optional)
+- `--recipient-pubkey <PUBKEY>`: Recipient public key for funds (optional)
 - `--challenge-file <PATH>`: Path to challenge JSON file (default: `challenger.json`)
+- `--acceptor-file <PATH>`: Path to acceptor JSON file (default: `acceptor.json`)
 
 **Examples:**
 
@@ -178,7 +178,7 @@ op-rand-cli try-spend --challenge-tx <TX_HEX> --challenger|--acceptor [OPTIONS]
 op-rand-cli try-spend \
   --challenge-tx "020000000001..." \
   --challenger \
-  --recipient-address "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx"
+  --recipient-pubkey "03a34b99f22c790c4e36b2b3c2c35a36db06226e41c692fc82b8b56ac1c540c5bd"
 
 # Try to spend as acceptor
 op-rand-cli try-spend \
@@ -186,6 +186,41 @@ op-rand-cli try-spend \
   --acceptor \
   --challenge-file my_challenge.json
 ```
+
+### 5. info
+
+Displays detailed information about a challenge, including cryptographic commitments, proof data, and transaction details in a formatted output.
+
+**Usage:**
+
+```bash
+op-rand-cli info [OPTIONS]
+```
+
+**Arguments:**
+
+- `--challenge-file <PATH>`: Path to challenge JSON file (default: `challenger.json`)
+
+**Example:**
+
+```bash
+# Display info for default challenge file
+op-rand-cli info
+
+# Display info for a specific challenge file
+op-rand-cli info --challenge-file my_challenge.json
+```
+
+**Output:**
+Shows a formatted display including:
+- Challenge ID and amount (in satoshis and BTC)
+- Deposit transaction outpoint details
+- Locktime information
+- Challenger public key and hash
+- Third-rank cryptographic commitments
+- Zero-knowledge proof and verification key information
+
+This command is useful for inspecting challenge files before accepting or completing them.
 
 ## Workflow Example
 
@@ -195,18 +230,20 @@ Here's a complete workflow between two parties:
 
 ```bash
 # Challenger creates a 100,000 satoshi challenge
-op-rand-cli create-challenge --amount 100000
+op-rand-cli create-challenge --amount 100000 --locktime 144
 # Outputs: challenger.json (share this) and private_challenger.json (keep private)
 ```
 
-### Step 2: Acceptor Accepts Challenge
+### Step 2: Acceptor Inspects and Accepts Challenge
 
 ```bash
-# Acceptor receives challenger.json and blindly selects commitment 0
+# Acceptor receives challenger.json and inspects it first
+op-rand-cli info --challenge-file challenger.json
+
+# Acceptor blindly selects commitment 0
 op-rand-cli accept-challenge \
   --challenge-file challenger.json \
-  --selected-commitment 0 \
-  --locktime 144
+  --selected-commitment 0
 # Outputs: acceptor.json (send back to challenger)
 ```
 
@@ -300,10 +337,10 @@ Use verbose flags for debugging cryptographic operations:
 
 ```bash
 # Basic verbose output
-op-rand-cli -v create-challenge --amount 100000
+op-rand-cli -v create-challenge --amount 100000 --locktime 144
 
 # Maximum verbosity (shows cryptographic details)
-op-rand-cli -vvv create-challenge --amount 100000
+op-rand-cli -vvv create-challenge --amount 100000 --locktime 144
 ```
 
 ## References
