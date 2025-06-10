@@ -1,20 +1,28 @@
 use std::{fs, str::FromStr};
 
 use crate::{
-    actions::{accept_challenge::AcceptorData, create_challenge::PublicChallengerData},
+    actions::{
+        accept_challenge::AcceptorData,
+        create_challenge::{PrivateChallengerData, PublicChallengerData},
+    },
     context::{Context, setup_progress_bar},
 };
+use base64::{Engine as _, engine::general_purpose};
+use bitcoin::{Amount, Psbt};
 use clap::Args;
 use color_eyre::eyre;
 use color_eyre::eyre::ensure;
 use op_rand_prover::{BarretenbergProver, OpRandProof, OpRandProver};
-use op_rand_types::ThirdRankCommitment;
+use op_rand_types::{FirstRankCommitment, ThirdRankCommitment};
 
 #[derive(Args, Debug)]
 pub struct CompleteChallengeArgs {
     /// Path to the challenge JSON file
     #[clap(long, default_value = "challenger.json")]
     pub challenger_file: String,
+    /// Path to the challenger's private key file
+    #[clap(long, default_value = "private_challenger.json")]
+    pub challenger_private_file: String,
     /// Path to the acceptor JSON file
     #[clap(long, default_value = "acceptor.json")]
     pub acceptor_file: String,
@@ -23,12 +31,17 @@ pub struct CompleteChallengeArgs {
 pub async fn run(
     CompleteChallengeArgs {
         challenger_file,
+        challenger_private_file,
         acceptor_file,
     }: CompleteChallengeArgs,
     mut ctx: Context,
 ) -> eyre::Result<()> {
     let challenger_json = fs::read_to_string(&challenger_file)?;
     let challenger_data: PublicChallengerData = serde_json::from_str(&challenger_json)?;
+
+    let challenger_private_json = fs::read_to_string(&challenger_private_file)?;
+    let challenger_private_data: PrivateChallengerData =
+        serde_json::from_str(&challenger_private_json)?;
 
     let acceptor_json = fs::read_to_string(&acceptor_file)?;
     let acceptor_data: AcceptorData = serde_json::from_str(&acceptor_json)?;
@@ -89,11 +102,30 @@ pub async fn run(
         .expect("Failed to verify acceptor proof");
 
     // TODO: cosign the PSBT and broadcast the transaction
-    let _esplora_client = ctx.esplora_client()?;
+    let esplora_client = ctx.esplora_client()?;
+    let transaction_builder = ctx.transaction_builder()?;
+    let psbt_bytes = general_purpose::STANDARD.decode(&acceptor_data.psbt)?;
 
-    let txid = "1471f9ac8f290e090cf4d5ea85ef582efc775f8837bce0426abc59b9b45630d0";
+    let psbt = Psbt::deserialize(&psbt_bytes).expect("Failed to deserialize PSBT");
+    let selected_first_rank_commitment =
+        FirstRankCommitment::from_str(&challenger_private_data.selected_first_rank_commitment)
+            .expect("Failed to parse first rank commitment");
 
-    println!("Challenge completed! Transaction ID: {}", txid);
+    let signed_challenge_transaction = transaction_builder
+        .complete_challenge_tx(
+            psbt,
+            Amount::from_sat(challenger_data.amount),
+            0,
+            selected_first_rank_commitment,
+        )
+        .expect("Failed to complete challenge transaction");
+
+    dbg!(&signed_challenge_transaction);
+
+    println!(
+        "Challenge completed! Transaction ID: {}",
+        signed_challenge_transaction.compute_txid()
+    );
 
     Ok(())
 }

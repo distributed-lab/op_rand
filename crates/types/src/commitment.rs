@@ -13,7 +13,7 @@ use rand::seq::IteratorRandom;
 
 /// Number of commitments to create.
 /// Currently only 2 commitments are supported.
-const COMMITMENTS_COUNT: usize = 2;
+pub const COMMITMENTS_COUNT: usize = 2;
 
 /// First rank commitment.
 /// This is the commitment that the challenger uses to create the deposit transaction.
@@ -23,6 +23,19 @@ pub struct FirstRankCommitment {
     public_key: PublicKey,
 }
 
+impl FromStr for FirstRankCommitment {
+    type Err = secp256k1::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let secret_key = SecretKey::from_str(s)?;
+        let public_key = secret_key.public_key(&Secp256k1::new());
+
+        Ok(FirstRankCommitment {
+            secret_key,
+            public_key,
+        })
+    }
+}
 impl FirstRankCommitment {
     pub fn inner(&self) -> (SecretKey, PublicKey) {
         (self.secret_key, self.public_key)

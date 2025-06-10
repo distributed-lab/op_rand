@@ -118,7 +118,7 @@ impl<C: Signing> TransactionBuilder<C> {
         );
 
         let mut outputs = vec![TxOut {
-            value: amount,
+            value: amount * 2,
             script_pubkey: ScriptBuf::new_p2wsh(&challenge_script.wscript_hash()),
         }];
 
@@ -151,10 +151,29 @@ impl<C: Signing> TransactionBuilder<C> {
         let mut psbt = Psbt::from_unsigned_tx(closing_tx)?;
 
         for (input_index, (_, amount)) in previous_outputs.iter().enumerate() {
-            self.sign_psbt_input(&mut psbt, input_index + 1, *amount)?;
+            self.sign_psbt_input(&mut psbt, input_index + 1, *amount, None)?;
         }
 
         Ok(psbt)
+    }
+
+    pub fn complete_challenge_tx(
+        &self,
+        mut psbt: Psbt,
+        deposit_amount: Amount,
+        deposit_input_index: usize,
+        first_rank_commitment: FirstRankCommitment,
+    ) -> Result<Transaction, TransactionError> {
+        let deposit_signing_key = first_rank_commitment.add_tweak(&self.secret_key)?;
+        self.sign_psbt_input(
+            &mut psbt,
+            deposit_input_index,
+            deposit_amount,
+            Some(deposit_signing_key),
+        )?;
+
+        psbt.extract_tx()
+            .map_err(TransactionError::ExtractTransactionFailed)
     }
 
     /// Signs single input inside `Transaction` by its index
@@ -201,13 +220,15 @@ impl<C: Signing> TransactionBuilder<C> {
         psbt: &mut Psbt,
         input_index: usize,
         amount: Amount,
+        secret_key: Option<SecretKey>,
     ) -> Result<(), TransactionError> {
         let psbt_input = psbt
             .inputs
             .get_mut(input_index)
             .ok_or(TransactionError::InputIndexOutOfBounds)?;
 
-        let public_key = self.secret_key.public_key(&self.ctx);
+        let secret_key = secret_key.unwrap_or(self.secret_key);
+        let public_key = secret_key.public_key(&self.ctx);
         let script_pubkey = ScriptBuf::new_p2wpkh(&PublicKey::new(public_key).wpubkey_hash()?);
 
         let mut sighasher = SighashCache::new(&psbt.unsigned_tx);
@@ -219,7 +240,7 @@ impl<C: Signing> TransactionBuilder<C> {
         )?;
 
         let message = Message::from_digest_slice(sighash.as_ref())?;
-        let signature = self.ctx.sign_ecdsa(&message, &self.secret_key);
+        let signature = self.ctx.sign_ecdsa(&message, &secret_key);
 
         let final_signature = bitcoin::ecdsa::Signature {
             signature,
@@ -229,6 +250,12 @@ impl<C: Signing> TransactionBuilder<C> {
         psbt_input
             .partial_sigs
             .insert(PublicKey::new(public_key), final_signature);
+
+        let witness_utxo = TxOut {
+            value: amount,
+            script_pubkey,
+        };
+        psbt_input.witness_utxo = Some(witness_utxo);
 
         let psbt_sighash_type = PsbtSighashType::from(EcdsaSighashType::All);
         if psbt_input.sighash_type.is_none() {
