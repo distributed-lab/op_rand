@@ -1,26 +1,13 @@
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum ProverError {
+    #[error("Proof generation error: {0}")]
     ProofGenerationError(String),
+    #[error("Proof verification error: {0}")]
     ProofVerificationError(String),
+    #[error("Setup error: {0}")]
     SetupError(String),
+    #[error("Invalid number of public signals: expected {expected}, got {got}")]
     InvalidNumberOfPublicSignals { expected: usize, got: usize },
+    #[error("Invalid proof")]
     InvalidProof,
-}
-
-impl std::fmt::Display for ProverError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::ProofGenerationError(e) => write!(f, "Proof generation error: {}", e),
-            Self::ProofVerificationError(e) => write!(f, "Proof verification error: {}", e),
-            Self::SetupError(e) => write!(f, "Setup error: {}", e),
-            Self::InvalidNumberOfPublicSignals { expected, got } => {
-                write!(
-                    f,
-                    "Invalid number of public signals: expected {}, got {}",
-                    expected, got
-                )
-            }
-            Self::InvalidProof => write!(f, "Invalid proof"),
-        }
-    }
 }

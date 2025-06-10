@@ -2,6 +2,9 @@ use color_eyre::eyre::ensure;
 
 use crate::esplora::Utxo;
 
+pub const FEES: u64 = 300;
+pub const MIN_CHANGE: u64 = 500;
+
 pub fn select_utxos(utxos: Vec<Utxo>, amount: u64) -> eyre::Result<Vec<Utxo>> {
     let mut selected_utxos = Vec::new();
     let mut remaining_amount = amount;

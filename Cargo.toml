@@ -1,25 +1,42 @@
 [workspace]
 resolver = "2"
-members = ["apps/cli", "crates/op-rand", "crates/prover"]
+members = [
+    "apps/cli",
+    "crates/transaction-builder",
+    "crates/prover",
+    "crates/types",
+]
 
 [workspace.package]
-name = "op-rand"
 version = "0.1.0"
 edition = "2024"
 
 [workspace.dependencies]
+# Modules
 op-rand-prover = { path = "crates/prover" }
+op-rand-transaction-builder = { path = "crates/transaction-builder" }
+op-rand-types = { path = "crates/types" }
 
+# Cryptography
 bitcoin = { version = "0.32.6", default-features = false }
-secp256k1 = { version = "0.31.0", default-features = false }
-rand = { version = "0.9.1", default-features = false }
-eyre = { version = "0.6.12", default-features = false }
-serde = { version = "1.0.219", default-features = false }
-serde_json = { version = "1.0.140", default-features = false }
-lazy_static = { version = "1.5.0", default-features = false }
-hex = { version = "0.4.3", default-features = false }
-
-# ZK 
+miniscript = { version = "12.3.2" }
 noir_rs = { git = "https://github.com/rarimo/noir_rs.git", branch = "v1.0.3", features = [
     "barretenberg",
 ] }
+rand = { version = "0.8.5", default-features = false }
+
+# Serialization
+serde = { version = "1.0.219", default-features = false }
+serde_json = { version = "1.0.140", default-features = false }
+hex = { version = "0.4.3", default-features = false }
+base64 = { version = "0.22.1", default-features = false }
+
+# Error handling
+eyre = { version = "0.6.12", default-features = false }
+thiserror = { version = "2.0.12", default-features = false }
+
+# Utilities
+lazy_static = { version = "1.5.0", default-features = false }
+
+[patch.crates-io]
+proptest = { git = "https://github.com/proptest-rs/proptest", tag = "v1.6.0" }

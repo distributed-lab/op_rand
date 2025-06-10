@@ -1,0 +1,10 @@
+[package]
+name = "op-rand-transaction-builder"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bitcoin = { workspace = true }
+miniscript = { workspace = true }
+op-rand-types = { workspace = true }
+thiserror = { workspace = true }

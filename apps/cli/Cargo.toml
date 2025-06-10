@@ -5,14 +5,15 @@ edition = "2024"
 
 [dependencies]
 op-rand-prover = { workspace = true }
-secp256k1 = { workspace = true, features = ["std"] }
+op-rand-types = { workspace = true }
+op-rand-transaction-builder = { workspace = true }
 rand = { workspace = true }
 eyre = { workspace = true }
 bitcoin = { workspace = true, features = ["serde"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 hex = { workspace = true }
-base64 = "0.22.1"
+base64 = { workspace = true }
 uuid = { version = "1.11.0", features = ["v4"] }
 config = { version = "0.15.11" }
 clap = { version = "4.3.23", features = ["derive"] }

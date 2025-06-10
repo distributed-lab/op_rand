@@ -3,7 +3,7 @@ use std::str::FromStr;
 use bitcoin::{
     key::Secp256k1,
     secp256k1::{
-        self, PublicKey, SecretKey, Signing,
+        self, PublicKey, Scalar, SecretKey, Signing,
         hashes::{Hash, sha256},
         rand,
     },
@@ -11,20 +11,48 @@ use bitcoin::{
 
 use rand::seq::IteratorRandom;
 
-const COMMITMENTS_COUNT: usize = 2;
+/// Number of commitments to create.
+/// Currently only 2 commitments are supported.
+pub const COMMITMENTS_COUNT: usize = 2;
 
+/// First rank commitment.
+/// This is the commitment that the challenger uses to create the deposit transaction.
 #[derive(Debug, Clone)]
 pub struct FirstRankCommitment {
     secret_key: SecretKey,
     public_key: PublicKey,
 }
 
+impl FromStr for FirstRankCommitment {
+    type Err = secp256k1::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let secret_key = SecretKey::from_str(s)?;
+        let public_key = secret_key.public_key(&Secp256k1::new());
+
+        Ok(FirstRankCommitment {
+            secret_key,
+            public_key,
+        })
+    }
+}
 impl FirstRankCommitment {
     pub fn inner(&self) -> (SecretKey, PublicKey) {
         (self.secret_key, self.public_key)
     }
+
+    pub fn add_tweak(&self, tweak: &SecretKey) -> Result<SecretKey, secp256k1::Error> {
+        let scalar = Scalar::from(*tweak);
+        self.secret_key.add_tweak(&scalar)
+    }
+
+    pub fn combine(&self, tweak: &PublicKey) -> Result<PublicKey, secp256k1::Error> {
+        self.public_key.combine(tweak)
+    }
 }
 
+/// Third rank commitment.
+/// This is the commitment that the acceptor uses to create the challenge transaction.
 #[derive(Debug, Clone)]
 pub struct ThirdRankCommitment {
     public_key: PublicKey,
@@ -33,6 +61,10 @@ pub struct ThirdRankCommitment {
 impl ThirdRankCommitment {
     pub fn inner(&self) -> PublicKey {
         self.public_key
+    }
+
+    pub fn combine(&self, tweak: &PublicKey) -> Result<PublicKey, secp256k1::Error> {
+        self.public_key.combine(tweak)
     }
 }
 
@@ -44,7 +76,11 @@ impl FromStr for ThirdRankCommitment {
         Ok(ThirdRankCommitment { public_key })
     }
 }
-/// Second rank commitments are intermediate and are only used to generate the third rank commitments.
+
+/// Commitments are used to create the challenge transaction.
+/// They are generated from the first rank commitments.
+/// Note that the second rank commitments are not stored, they are only used to generate the
+/// third rank commitments.
 #[derive(Debug, Clone)]
 pub struct Commitments {
     first_rank_commitments: [FirstRankCommitment; 2],
@@ -82,7 +118,7 @@ impl Commitments {
         let third_rank_commitments = second_rank_commitments
             .iter()
             .map(|commitment| {
-                let third_rank_pk = commitment.public_key(&ctx);
+                let third_rank_pk = commitment.public_key(ctx);
 
                 ThirdRankCommitment {
                     public_key: third_rank_pk,
