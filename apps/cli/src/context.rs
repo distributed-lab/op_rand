@@ -2,7 +2,6 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::{config::Config, esplora::EsploraClient};
-use bitcoin::secp256k1::Context as SecpContext;
 use bitcoin::secp256k1::{All, Secp256k1};
 use color_eyre::{eyre, eyre::Context as _};
 use indicatif::{ProgressBar, ProgressStyle};

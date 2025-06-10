@@ -118,7 +118,7 @@ impl Commitments {
         let third_rank_commitments = second_rank_commitments
             .iter()
             .map(|commitment| {
-                let third_rank_pk = commitment.public_key(&ctx);
+                let third_rank_pk = commitment.public_key(ctx);
 
                 ThirdRankCommitment {
                     public_key: third_rank_pk,

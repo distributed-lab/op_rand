@@ -1,7 +1,5 @@
 use bitcoin::{
-    key::UncompressedPublicKeyError,
-    psbt::{Error as PsbtError, ExtractTxError},
-    secp256k1::Error as Secp256k1Error,
+    key::UncompressedPublicKeyError, psbt::Error as PsbtError, secp256k1::Error as Secp256k1Error,
     sighash::P2wpkhError,
 };
 use std::fmt;
@@ -17,7 +15,7 @@ pub enum TransactionError {
     NoDepositTxStored,
     TransactionTypeMismatch,
     InputIndexOutOfBounds,
-    ExtractTransactionFailed(ExtractTxError),
+    ExtractTransactionFailed,
     PsbtFinalizationFailed(Vec<miniscript::psbt::Error>),
 }
 
@@ -49,8 +47,8 @@ impl fmt::Display for TransactionError {
             TransactionError::InputIndexOutOfBounds => {
                 f.write_str("Provided input index is out of bounds for this transaction.")
             }
-            TransactionError::ExtractTransactionFailed(ref err) => {
-                f.write_str(&format!("Failed to extract transaction from PSBT: {}", err))
+            TransactionError::ExtractTransactionFailed => {
+                f.write_str("Failed to extract transaction from PSBT.")
             }
             TransactionError::PsbtFinalizationFailed(ref errors) => {
                 f.write_str(&format!("Failed to finalize PSBT: {:?}", errors))
@@ -80,12 +78,6 @@ impl From<Secp256k1Error> for TransactionError {
 impl From<PsbtError> for TransactionError {
     fn from(err: PsbtError) -> Self {
         TransactionError::Psbt(err)
-    }
-}
-
-impl From<ExtractTxError> for TransactionError {
-    fn from(err: ExtractTxError) -> Self {
-        TransactionError::ExtractTransactionFailed(err)
     }
 }
 

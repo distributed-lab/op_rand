@@ -13,7 +13,6 @@ use op_rand_prover::{BarretenbergProver, OpRandProver};
 use op_rand_types::Commitments;
 use serde::{Deserialize, Serialize};
 use std::{fs, str::FromStr};
-use tokio;
 
 use crate::{
     context::{Context, setup_progress_bar},

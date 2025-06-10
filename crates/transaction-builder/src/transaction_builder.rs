@@ -15,12 +15,7 @@ use crate::{
     scripts::{create_closing_p2wsh_script, create_p2wpkh_script},
 };
 
-/// `TransactionBuilder` performs building transaction with stored public key, needed for scripts.
-/// Intended usage flow:
-/// - Create new `TransactionBuilder` with `TransactionBuilder::from_pubkey(PublicKey)`
-/// - Store deposit tx input from which to take coins for game transactions, you could either
-/// build a new tx with `build_and_set_deposit_tx` or just set existing TxIn with `set_deposit_txin`
-/// - Build initial transaction or closing partially signed transaction
+/// `TransactionBuilder` is used by both parties to build deposit and challenge transactions.
 #[derive(Debug, Clone)]
 pub struct TransactionBuilder<C: Context> {
     secret_key: SecretKey,
@@ -98,6 +93,7 @@ impl<C: Signing + Verification> TransactionBuilder<C> {
     /// Builds challenge transaction as PSBT and returns it. Needs an input from initial tx
     /// and Challenger's public key, which must be provided by the Challenger, as well as
     /// tweak value to combine with Acceptor's public key
+    #[allow(clippy::too_many_arguments)]
     pub fn build_challenge_tx(
         &self,
         challenger_pubkey: &PublicKey,
@@ -176,7 +172,7 @@ impl<C: Signing + Verification> TransactionBuilder<C> {
         psbt.finalize_mut(&self.ctx)?;
 
         psbt.extract_tx()
-            .map_err(TransactionError::ExtractTransactionFailed)
+            .map_err(|_e| TransactionError::ExtractTransactionFailed)
     }
 
     /// Signs single input inside `Transaction` by its index

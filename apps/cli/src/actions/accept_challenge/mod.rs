@@ -16,7 +16,6 @@ use op_rand_prover::{BarretenbergProver, OpRandProof, OpRandProver};
 use op_rand_types::ThirdRankCommitment;
 use serde::{Deserialize, Serialize};
 use std::{fs, str::FromStr};
-use tokio;
 
 #[derive(Args, Debug)]
 pub struct AcceptChallengeArgs {
@@ -174,9 +173,7 @@ pub async fn run(
             &public_key.inner,
             &sig,
             ripemd160_hash.to_byte_array(),
-            commitments
-                .try_into()
-                .expect("Failed to convert commitments to array"),
+            commitments,
         )
         .expect("Failed to generate acceptor proof");
     pb.finish_with_message("Acceptor proof generated");
