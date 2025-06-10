@@ -4,8 +4,10 @@ use bitcoin::{
     secp256k1::rand::thread_rng,
 };
 use clap::Args;
-use color_eyre::eyre;
-use eyre::{OptionExt, ensure};
+use color_eyre::{
+    eyre,
+    eyre::{OptionExt, ensure},
+};
 use op_rand_prover::{BarretenbergProver, Commitments, OpRandProver};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -19,20 +21,24 @@ use crate::{
 #[derive(Args, Debug)]
 pub struct CreateChallengeArgs {
     /// Challenge amount in satoshis.
-    #[clap(long, short)]
+    #[clap(long)]
     pub amount: u64,
 
     /// Number of commitments to create.s
-    #[clap(long, short, default_value = "2")]
+    #[clap(long, default_value = "2")]
     pub commitments_count: u32,
 
     /// Output file path for the challenge JSON
-    #[clap(long, short, default_value = "challenger.json")]
-    pub output: String,
+    #[clap(long, default_value = "challenger.json")]
+    pub public_output: String,
+
+    /// Output file path for the private challenge JSON
+    #[clap(long, default_value = "private_challenger.json")]
+    pub private_output: String,
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct ChallengeData {
+pub struct PublicChallengerData {
     pub id: String,
     pub amount: u64,
     pub challenge_outpoint: OutPoint,
@@ -43,11 +49,21 @@ pub struct ChallengeData {
     pub vk: String,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct PrivateChallengerData {
+    pub id: String,
+    pub amount: u64,
+    pub challenge_transaction: String,
+    pub first_rank_commitments: [String; 2],
+    pub selected_first_rank_commitment: String,
+}
+
 pub async fn run(
     CreateChallengeArgs {
         amount,
         commitments_count,
-        output,
+        public_output,
+        private_output,
     }: CreateChallengeArgs,
     mut ctx: Context,
 ) -> eyre::Result<()> {
@@ -71,7 +87,7 @@ pub async fn run(
 
     let prover = BarretenbergProver::default();
 
-    let pb = setup_progress_bar("Setting up challenger circuit...".into());
+    let pb = setup_progress_bar("Setting up the challenger circuit...".into());
     let prover_clone = prover.clone();
     tokio::task::spawn_blocking(move || {
         prover_clone
@@ -100,7 +116,7 @@ pub async fn run(
     let sha256_hash = sha256::Hash::hash(&tweaked_pk.serialize());
     let ripemd160_hash = ripemd160::Hash::hash(sha256_hash.as_byte_array());
 
-    let pb = setup_progress_bar("Generating challenger proof...".into());
+    let pb = setup_progress_bar("Generating the challenger proof...".into());
     let proof = prover
         .generate_challenger_proof(
             first_rank_commitments.to_owned(),
@@ -111,6 +127,8 @@ pub async fn run(
         .expect("Failed to generate challenger proof");
     pb.finish_with_message("Challenger proof generated");
 
+    let pb = setup_progress_bar("Creating a deposit transaction...".into());
+
     // TODO: This must be an actual deposit outpoint
     let challenge_outpoint = OutPoint::new(
         selected_utxos[0]
@@ -120,10 +138,14 @@ pub async fn run(
         selected_utxos[0].vout,
     );
 
+    pb.finish_with_message("Deposit transaction created");
+
+    let pb = setup_progress_bar("Assembling the challenger data...".into());
     let id = uuid::Uuid::new_v4().to_string();
 
-    let challenge_output = ChallengeData {
-        id,
+    let public_challenge_output = PublicChallengerData {
+        id: id.clone(),
+        // TODO: this should be the amount of the deposit output, e.g. amount - fee
         amount,
         challenge_outpoint,
         third_rank_commitments: [
@@ -136,10 +158,30 @@ pub async fn run(
         vk: hex::encode(proof.vk()),
     };
 
-    let json_output = serde_json::to_string_pretty(&challenge_output)?;
-    fs::write(&output, json_output)?;
+    let json_output = serde_json::to_string_pretty(&public_challenge_output)?;
+    fs::write(&public_output, json_output)?;
 
-    println!("Challenge created successfully and saved to: {}", output);
+    let private_challenge_output = PrivateChallengerData {
+        id,
+        amount,
+        challenge_transaction: "Challenge tx".to_string(),
+        first_rank_commitments: [
+            hex::encode(first_rank_commitments[0].inner().0.secret_bytes()),
+            hex::encode(first_rank_commitments[1].inner().0.secret_bytes()),
+        ],
+        selected_first_rank_commitment: hex::encode(
+            random_first_rank_commitment.inner().0.secret_bytes(),
+        ),
+    };
+
+    let private_json_output = serde_json::to_string_pretty(&private_challenge_output)?;
+    fs::write(&private_output, private_json_output)?;
+
+    pb.finish_with_message(format!(
+        "Challenge created successfully.\nShare the public data saved in {} with the acceptor\nDo not share the private data saved in {}",
+        public_output,
+        private_output
+    ));
 
     Ok(())
 }

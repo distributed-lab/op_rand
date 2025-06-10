@@ -1,13 +1,6 @@
-use std::str::FromStr;
-
-use bitcoin::OutPoint;
-use eyre::ensure;
+use color_eyre::eyre::ensure;
 
 use crate::esplora::Utxo;
-
-pub fn parse_outpoint(s: &str) -> Result<OutPoint, String> {
-    OutPoint::from_str(s).map_err(|e| e.to_string())
-}
 
 pub fn select_utxos(utxos: Vec<Utxo>, amount: u64) -> eyre::Result<Vec<Utxo>> {
     let mut selected_utxos = Vec::new();

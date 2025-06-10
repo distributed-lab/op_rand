@@ -1,21 +1,20 @@
-use std::{path::PathBuf, str::FromStr};
-
-use bitcoin::OutPoint;
 use clap::{Parser, Subcommand};
 use clap_verbosity::Verbosity;
 use color_eyre::eyre;
+use std::path::PathBuf;
 use tracing_log::AsTrace;
 
 use crate::{
     actions::{
         accept_challenge::AcceptChallengeArgs, complete_challenge::CompleteChallengeArgs,
-        create_challenge::CreateChallengeArgs,
+        create_challenge::CreateChallengeArgs, try_spend::TrySpendArgs,
     },
     context::Context,
 };
 mod accept_challenge;
 mod complete_challenge;
 mod create_challenge;
+mod try_spend;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -40,6 +39,9 @@ pub enum Commands {
 
     /// Complete a challenge
     CompleteChallenge(CompleteChallengeArgs),
+
+    /// Try to spend a challenge
+    TrySpend(TrySpendArgs),
 }
 
 impl Cli {
@@ -59,5 +61,6 @@ async fn execute_command(command: Commands, context: Context) -> eyre::Result<()
         Cmd::CreateChallenge(cmd) => create_challenge::run(cmd, context).await,
         Cmd::AcceptChallenge(cmd) => accept_challenge::run(cmd, context).await,
         Cmd::CompleteChallenge(cmd) => complete_challenge::run(cmd, context).await,
+        Cmd::TrySpend(cmd) => try_spend::run(cmd, context).await,
     }
 }

@@ -1,5 +1,5 @@
 use crate::{
-    actions::create_challenge::ChallengeData,
+    actions::create_challenge::PublicChallengerData,
     context::{Context, setup_progress_bar},
     util::select_utxos,
 };
@@ -49,7 +49,7 @@ pub async fn run(
     mut ctx: Context,
 ) -> eyre::Result<()> {
     let challenge_json = fs::read_to_string(&challenge_file)?;
-    let challenge_data: ChallengeData = serde_json::from_str(&challenge_json)?;
+    let challenge_data: PublicChallengerData = serde_json::from_str(&challenge_json)?;
 
     let prover = BarretenbergProver::default();
     let pb = setup_progress_bar("Setting up challenge circuit...".into());
@@ -148,9 +148,7 @@ pub async fn run(
         proof: hex::encode(proof.proof()),
         vk: hex::encode(proof.vk()),
         acceptor_pubkey_hash: hex::encode(ripemd160_hash),
-        third_rank_commitments: challenge_data
-            .third_rank_commitments
-            .map(|s| hex::encode(s)),
+        third_rank_commitments: challenge_data.third_rank_commitments,
         // TODO: Add PSBT
         psbt: "".to_string(),
     };
