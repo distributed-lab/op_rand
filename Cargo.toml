@@ -1,14 +1,14 @@
 [workspace]
 resolver = "2"
-members = ["apps/cli", "crates/op-rand", "crates/prover"]
+members = ["apps/cli", "crates/transaction-builder", "crates/prover"]
 
 [workspace.package]
-name = "op-rand"
 version = "0.1.0"
 edition = "2024"
 
 [workspace.dependencies]
 op-rand-prover = { path = "crates/prover" }
+op-rand-transaction-builder = { path = "crates/transaction-builder" }
 
 bitcoin = { version = "0.32.6", default-features = false }
 secp256k1 = { version = "0.31.0", default-features = false }

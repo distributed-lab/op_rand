@@ -2258,13 +2258,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4895175b425cb1f87721b59f0f286c2092bd4af812243672510e1ac53e2e0ad"
 
 [[package]]
-name = "op-rand"
-version = "0.1.0"
-dependencies = [
- "bitcoin",
-]
-
-[[package]]
 name = "op-rand-cli"
 version = "0.1.0"
 dependencies = [
@@ -2299,6 +2292,13 @@ dependencies = [
  "noir_rs",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "op-rand-transaction-builder"
+version = "0.1.0"
+dependencies = [
+ "bitcoin",
 ]
 
 [[package]]
