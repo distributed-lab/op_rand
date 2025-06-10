@@ -9,6 +9,7 @@ use color_eyre::{
     eyre,
     eyre::{OptionExt, ensure},
 };
+use console::style;
 use op_rand_prover::{BarretenbergProver, OpRandProver};
 use op_rand_types::Commitments;
 use serde::{Deserialize, Serialize};
@@ -16,6 +17,7 @@ use std::{fs, str::FromStr};
 
 use crate::{
     context::{Context, setup_progress_bar},
+    ui::{self, CHAIN, CHECK, CLOCK, GEAR, KEY, SPARKLES, TARGET},
     util::{FEES, MIN_CHANGE, select_utxos},
 };
 
@@ -79,9 +81,28 @@ pub async fn run(
     }: CreateChallengeArgs,
     mut ctx: Context,
 ) -> eyre::Result<()> {
+    println!(
+        "{}",
+        ui::header("                        🎯 CREATING CHALLENGE 🎯")
+    );
+
     ensure!(
         commitments_count == 2,
         "OP_RAND currently only supports 2 commitments"
+    );
+
+    println!(
+        "\n{} {} {}",
+        CHECK,
+        style("Challenge amount:").bold().yellow(),
+        ui::format_bitcoin_amount(amount)
+    );
+
+    println!(
+        "{} {} {} blocks",
+        CLOCK,
+        style("Locktime:").bold().yellow(),
+        style(locktime.to_string()).bright().cyan()
     );
 
     let cfg = ctx.config()?;
@@ -95,8 +116,20 @@ pub async fn run(
         cfg.network,
     );
 
+    println!(
+        "\n{} {}",
+        GEAR,
+        style("Preparing transaction inputs...").bold().blue()
+    );
+
     let utxos = esplora_client.get_utxos(&address.to_string()).await?;
     let selected_utxos = select_utxos(utxos, amount + FEES)?;
+
+    println!(
+        "{} {} UTXOs selected for funding",
+        CHECK,
+        style(selected_utxos.len().to_string()).bold().green()
+    );
 
     let prover = BarretenbergProver::default();
 
@@ -109,6 +142,14 @@ pub async fn run(
     })
     .await?;
     pb.finish_with_message("Challenger circuit is set up");
+
+    println!(
+        "\n{} {}",
+        KEY,
+        style("Generating cryptographic commitments...")
+            .bold()
+            .blue()
+    );
 
     let commitments = Commitments::generate(secp, &mut thread_rng())?;
 
@@ -124,6 +165,12 @@ pub async fn run(
 
     let sha256_hash = sha256::Hash::hash(&tweaked_pk.serialize());
     let ripemd160_hash = ripemd160::Hash::hash(sha256_hash.as_byte_array());
+
+    println!(
+        "{} {} third-rank commitments generated",
+        CHECK,
+        style("2").bold().green()
+    );
 
     let pb = setup_progress_bar("Generating the challenger proof...".into());
     let proof = prover.generate_challenger_proof(
@@ -151,6 +198,12 @@ pub async fn run(
         })
         .collect::<Result<Vec<_>, eyre::Error>>()?;
 
+    println!(
+        "\n{} {}",
+        CHAIN,
+        style("Creating deposit transaction...").bold().blue()
+    );
+
     let pb = setup_progress_bar("Creating a deposit transaction...".into());
     let deposit_tx = transaction_builder.build_deposit_transaction(
         random_first_rank_commitment.to_owned(),
@@ -162,8 +215,23 @@ pub async fn run(
 
     pb.finish_with_message("Deposit transaction created");
 
+    println!(
+        "{} {} {}",
+        CHECK,
+        style("Deposit TXID:").bold().yellow(),
+        style(&deposit_tx.compute_txid().to_string())
+            .bright()
+            .white()
+    );
+
     let pb = setup_progress_bar("Assembling the challenger data...".into());
     let id = uuid::Uuid::new_v4().to_string();
+
+    println!(
+        "\n{} {}",
+        SPARKLES,
+        style("Finalizing challenge data...").bold().blue()
+    );
 
     let public_challenge_output = PublicChallengerData {
         id: id.clone(),
@@ -187,7 +255,7 @@ pub async fn run(
     deposit_tx.consensus_encode(&mut tx_bytes)?;
 
     let private_challenge_output = PrivateChallengerData {
-        id,
+        id: id.clone(),
         amount,
         deposit_transaction: hex::encode(tx_bytes),
         first_rank_commitments: [
@@ -202,11 +270,39 @@ pub async fn run(
     let private_json_output = serde_json::to_string_pretty(&private_challenge_output)?;
     fs::write(&private_output, private_json_output)?;
 
-    pb.finish_with_message(format!(
-        "Challenge created successfully.\nShare the public data saved in {} with the acceptor\nDo not share the private data saved in {}",
-        public_output,
-        private_output
-    ));
+    pb.finish_with_message("Challenge data assembled");
+
+    // Success message
+    println!("{}", ui::success_footer("CHALLENGE CREATED SUCCESSFULLY!"));
+    println!("{}", ui::section_header("CHALLENGE DETAILS"));
+    println!("│");
+    println!(
+        "│ {} {} {}",
+        TARGET,
+        style("Challenge ID:").bold().yellow(),
+        style(&id).bright().white()
+    );
+    println!(
+        "│ {} {} {}",
+        TARGET,
+        style("Amount:").bold().yellow(),
+        ui::format_bitcoin_amount(amount)
+    );
+    println!("│");
+    println!("{}", ui::section_header("FILE OUTPUTS"));
+    println!("│");
+    println!(
+        "│ {} {} {}",
+        style("📤").bold(),
+        style("Public data (share with acceptor):").bold().green(),
+        style(&public_output).bright().white()
+    );
+    println!(
+        "│ {} {} {}",
+        style("🔒").bold(),
+        style("Private data (keep secure):").bold().red(),
+        style(&private_output).bright().white()
+    );
 
     Ok(())
 }

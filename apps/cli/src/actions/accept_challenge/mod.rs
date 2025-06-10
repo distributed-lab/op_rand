@@ -1,6 +1,7 @@
 use crate::{
     actions::create_challenge::PublicChallengerData,
     context::{Context, setup_progress_bar},
+    ui::{self, CHAIN, CHECK, GEAR, KEY, SHIELD},
     util::{FEES, MIN_CHANGE, select_utxos},
 };
 use base64::{Engine as _, engine::general_purpose};
@@ -12,6 +13,7 @@ use bitcoin::{
 };
 use clap::Args;
 use color_eyre::eyre;
+use console::style;
 use op_rand_prover::{BarretenbergProver, OpRandProof, OpRandProver};
 use op_rand_types::ThirdRankCommitment;
 use serde::{Deserialize, Serialize};
@@ -51,8 +53,27 @@ pub async fn run(
     }: AcceptChallengeArgs,
     mut ctx: Context,
 ) -> eyre::Result<()> {
+    println!(
+        "{}",
+        ui::header("                        🤝 ACCEPTING CHALLENGE 🤝")
+    );
+
     let challenge_json = fs::read_to_string(&challenge_file)?;
     let challenge_data: PublicChallengerData = serde_json::from_str(&challenge_json)?;
+
+    println!(
+        "\n{} {} {}",
+        CHECK,
+        style("Challenge loaded:").bold().green(),
+        style(&challenge_data.id).bright().white()
+    );
+
+    println!(
+        "{} {} {}",
+        CHECK,
+        style("Challenge amount:").bold().yellow(),
+        ui::format_bitcoin_amount(challenge_data.amount)
+    );
 
     let prover = BarretenbergProver::default();
     let pb = setup_progress_bar("Setting up challenge circuit...".into());
@@ -81,12 +102,26 @@ pub async fn run(
     let vk = hex::decode(&challenge_data.vk)?;
     let proof_data = OpRandProof::new(proof, vk);
 
+    println!(
+        "\n{} {}",
+        SHIELD,
+        style("Verifying challenger proof...").bold().blue()
+    );
+
     prover.verify_challenger_proof(
         commitments.clone(),
         &challenger_pubkey,
         challenger_pubkey_hash,
         &proof_data,
     )?;
+
+    println!(
+        "{} {}",
+        CHECK,
+        style("Challenger proof verified successfully!")
+            .bold()
+            .green()
+    );
 
     let cfg = ctx.config()?;
     let private_key = cfg.private_key;
@@ -99,10 +134,26 @@ pub async fn run(
         cfg.network,
     );
 
+    println!(
+        "\n{} {}",
+        GEAR,
+        style("Preparing transaction inputs...").bold().blue()
+    );
+
     let utxos = esplora_client.get_utxos(&address.to_string()).await?;
     let selected_utxos = select_utxos(utxos, challenge_data.amount + FEES)?;
 
-    let selected_commitment = &commitments[selected_commitment as usize];
+    let selected_commitment_index = selected_commitment as usize;
+    let selected_commitment = &commitments[selected_commitment_index];
+
+    println!(
+        "{} {} {}",
+        CHECK,
+        style("Selected commitment:").bold().yellow(),
+        style((selected_commitment_index + 1).to_string())
+            .bright()
+            .cyan()
+    );
 
     let inputs_sum = selected_utxos.iter().map(|utxo| utxo.value).sum::<u64>();
     let change_amount = inputs_sum - challenge_data.amount - FEES;
@@ -120,6 +171,12 @@ pub async fn run(
             ))
         })
         .collect::<Result<Vec<_>, eyre::Error>>()?;
+
+    println!(
+        "\n{} {}",
+        CHAIN,
+        style("Building challenge transaction...").bold().blue()
+    );
 
     let (challenge_script, psbt) = tx_builder.build_challenge_tx(
         &challenger_pubkey.into(),
@@ -161,8 +218,14 @@ pub async fn run(
     )?;
     pb.finish_with_message("Acceptor proof generated");
 
+    println!(
+        "\n{} {}",
+        KEY,
+        style("Generating acceptor data...").bold().blue()
+    );
+
     let acceptor_output = AcceptorData {
-        id: challenge_data.id,
+        id: challenge_data.id.clone(),
         proof: hex::encode(proof.proof()),
         vk: hex::encode(proof.vk()),
         acceptor_pubkey_hash: hex::encode(ripemd160_hash),
@@ -173,6 +236,19 @@ pub async fn run(
 
     let acceptor_json = serde_json::to_string(&acceptor_output)?;
     fs::write(&output, acceptor_json)?;
+
+    println!("{}", ui::success_footer("Challenge accepted successfully!"));
+    println!(
+        "   {} {} {}",
+        style("Acceptor data saved to:").dim(),
+        style(&output).bright().white().bold(),
+        style("📄").dim()
+    );
+    println!(
+        "   {} {}",
+        style("Challenge ID:").dim(),
+        style(&challenge_data.id).bright().cyan()
+    );
 
     Ok(())
 }

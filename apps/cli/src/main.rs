@@ -2,6 +2,7 @@ mod actions;
 mod config;
 mod context;
 mod esplora;
+mod ui;
 mod util;
 
 use clap::Parser;

@@ -7,10 +7,12 @@ use bitcoin::{
 };
 use clap::{ArgGroup, Args};
 use color_eyre::eyre;
+use console::style;
 
 use crate::{
     actions::{accept_challenge::AcceptorData, create_challenge::PublicChallengerData},
     context::Context,
+    ui::{self, CHAIN, CHECK, GEAR, RADIO, SPARKLES},
     util::FEES,
 };
 
@@ -56,26 +58,65 @@ pub async fn run(
     }: TrySpendArgs,
     mut ctx: Context,
 ) -> eyre::Result<()> {
+    let operation_type = if challenger { "CHALLENGER" } else { "ACCEPTOR" };
+    println!(
+        "{}",
+        ui::header(&format!("                       {} SWEEP ", operation_type))
+    );
+
+    println!(
+        "\n{} {}",
+        GEAR,
+        style("Loading challenge data...").bold().blue()
+    );
+
     let challenger_json = fs::read_to_string(&challenge_file)?;
     let challenger_data: PublicChallengerData = serde_json::from_str(&challenger_json)?;
 
     let acceptor_json = fs::read_to_string(&acceptor_file)?;
     let acceptor_data: AcceptorData = serde_json::from_str(&acceptor_json)?;
 
+    println!(
+        "{} {} {}",
+        CHECK,
+        style("Challenge ID:").bold().yellow(),
+        style(&challenger_data.id).bright().white()
+    );
+
     let esplora_client = ctx.esplora_client()?;
     let tx_builder = ctx.transaction_builder()?;
 
+    println!(
+        "\n{} {}",
+        CHAIN,
+        style("Parsing challenge transaction...").bold().blue()
+    );
+
     let challenge_tx_bytes = hex::decode(&challenge_tx)?;
     let challenge_transaction = Transaction::consensus_decode(&mut challenge_tx_bytes.as_slice())?;
+
+    println!(
+        "{} {} {}",
+        CHECK,
+        style("Challenge TXID:").bold().yellow(),
+        style(&challenge_transaction.compute_txid().to_string())
+            .bright()
+            .white()
+    );
 
     let fee_amount = Amount::from_sat(FEES);
 
     let recipient_pubkey = recipient_pubkey.and_then(|pk| PublicKey::from_str(&pk).ok());
 
     if challenger {
-        println!("Creating challenger sweep transaction...");
+        println!(
+            "\n{} {}",
+            GEAR,
+            style("Creating challenger sweep transaction...")
+                .bold()
+                .blue()
+        );
 
-        // Parse the witness script from hex
         let witness_script =
             bitcoin::ScriptBuf::from_hex(&acceptor_data.challenge_output_witness_script)?;
 
@@ -87,26 +128,52 @@ pub async fn run(
             fee_amount,
         )?;
 
-        println!("Challenger sweep transaction created:");
-        println!("TXID: {}", sweep_tx.compute_txid());
         println!(
-            "Raw transaction: {}",
-            bitcoin::consensus::encode::serialize_hex(&sweep_tx)
+            "{} {}",
+            CHECK,
+            style("Challenger sweep transaction created!")
+                .bold()
+                .green()
+        );
+        println!(
+            "   {} {}",
+            style("TXID:").dim(),
+            style(&sweep_tx.compute_txid().to_string()).bright().white()
+        );
+
+        println!(
+            "\n{} {}",
+            RADIO,
+            style("Broadcasting challenger sweep transaction...")
+                .bold()
+                .blue()
         );
 
         esplora_client
             .broadcast_transaction(&bitcoin::consensus::encode::serialize_hex(&sweep_tx))
             .await?;
+
+        println!(
+            "{} {}",
+            SPARKLES,
+            style("Challenger sweep transaction broadcasted successfully!")
+                .bold()
+                .green()
+        );
     }
 
     if acceptor {
-        println!("Creating acceptor sweep transaction...");
+        println!(
+            "\n{} {}",
+            GEAR,
+            style("Creating acceptor sweep transaction...")
+                .bold()
+                .blue()
+        );
 
-        // Parse the witness script from hex
         let witness_script_bytes = hex::decode(&acceptor_data.challenge_output_witness_script)?;
         let witness_script = bitcoin::ScriptBuf::from_bytes(witness_script_bytes);
 
-        // Parse challenger pubkey from hex
         let challenger_pubkey_bytes = hex::decode(&challenger_data.challenger_pubkey)?;
         let challenger_pubkey = bitcoin::PublicKey::from_slice(&challenger_pubkey_bytes)?;
 
@@ -118,16 +185,36 @@ pub async fn run(
             fee_amount,
         )?;
 
-        println!("Acceptor sweep transaction created:");
-        println!("TXID: {}", sweep_tx.compute_txid());
         println!(
-            "Raw transaction: {}",
-            bitcoin::consensus::encode::serialize_hex(&sweep_tx)
+            "{} {}",
+            CHECK,
+            style("Acceptor sweep transaction created!").bold().green()
+        );
+        println!(
+            "   {} {}",
+            style("TXID:").dim(),
+            style(&sweep_tx.compute_txid().to_string()).bright().white()
+        );
+
+        println!(
+            "\n{} {}",
+            RADIO,
+            style("Broadcasting acceptor sweep transaction...")
+                .bold()
+                .blue()
         );
 
         esplora_client
             .broadcast_transaction(&bitcoin::consensus::encode::serialize_hex(&sweep_tx))
             .await?;
+
+        println!(
+            "{} {}",
+            SPARKLES,
+            style("Acceptor sweep transaction broadcasted successfully!")
+                .bold()
+                .green()
+        );
     }
 
     Ok(())

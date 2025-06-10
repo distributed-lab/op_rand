@@ -13,7 +13,6 @@ pub struct ChallengeInfoArgs {
 }
 
 static ROCKET: Emoji<'_, '_> = Emoji("🚀 ", "");
-static MONEY: Emoji<'_, '_> = Emoji("💰 ", "");
 static KEY: Emoji<'_, '_> = Emoji("🔑 ", "");
 static LOCK: Emoji<'_, '_> = Emoji("🔒 ", "");
 static SHIELD: Emoji<'_, '_> = Emoji("🛡️ ", "");
@@ -24,7 +23,6 @@ pub async fn run(ChallengeInfoArgs { challenge_file }: ChallengeInfoArgs) -> eyr
     let challenge_json = fs::read_to_string(&challenge_file)?;
     let challenge_data: PublicChallengerData = serde_json::from_str(&challenge_json)?;
 
-    // Print beautiful header
     println!("\n{}", "═".repeat(80));
     println!(
         "{}",
@@ -34,18 +32,16 @@ pub async fn run(ChallengeInfoArgs { challenge_file }: ChallengeInfoArgs) -> eyr
     );
     println!("{}", "═".repeat(80));
 
-    // Challenge ID section
     println!(
         "\n{} {}",
         style("Challenge ID:").bold().yellow(),
         style(&challenge_data.id).bright().white()
     );
 
-    // Amount section with Bitcoin conversion
     let btc_amount = challenge_data.amount as f64 / 100_000_000.0;
     println!(
         "{} {} {} satoshis ({} BTC)",
-        MONEY,
+        CHAIN,
         style("Amount:").bold().yellow(),
         style(challenge_data.amount.to_string())
             .bright()
@@ -103,9 +99,8 @@ pub async fn run(ChallengeInfoArgs { challenge_file }: ChallengeInfoArgs) -> eyr
     println!("│");
     for (i, commitment) in challenge_data.third_rank_commitments.iter().enumerate() {
         println!(
-            "│ {} {}",
+            "│ {}",
             style(format!("Commitment {}:", i + 1)).bold().yellow(),
-            ""
         );
         println!("│   {}", style(commitment).dim());
         if i < challenge_data.third_rank_commitments.len() - 1 {
