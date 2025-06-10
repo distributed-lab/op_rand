@@ -1,10 +1,12 @@
 use crate::{
     actions::create_challenge::PublicChallengerData,
     context::{Context, setup_progress_bar},
-    util::select_utxos,
+    util::{FEES, MIN_CHANGE, select_utxos},
 };
+use base64::{Engine as _, engine::general_purpose};
 use bitcoin::{
-    Address, CompressedPublicKey,
+    Address, Amount, CompressedPublicKey, OutPoint, Txid,
+    absolute::{Height, LockTime},
     hashes::{Hash, ripemd160, sha256},
     secp256k1::{Message, PublicKey, SecretKey},
 };
@@ -94,6 +96,7 @@ pub async fn run(
     let cfg = ctx.config()?;
     let private_key = cfg.private_key;
     let esplora_client = ctx.esplora_client()?;
+    let tx_builder = ctx.transaction_builder()?;
     let secp = ctx.secp_ctx();
     let public_key = private_key.public_key(secp);
     let address = Address::p2wpkh(
@@ -102,10 +105,43 @@ pub async fn run(
     );
 
     let utxos = esplora_client.get_utxos(&address.to_string()).await?;
-    // TODO: use for PSBT construction
-    let _selected_utxos = select_utxos(utxos, challenge_data.amount)?;
-
+    let selected_utxos = select_utxos(utxos, challenge_data.amount + FEES)?;
     let selected_commitment = &commitments[selected_commitment as usize];
+
+    let inputs_sum = selected_utxos.iter().map(|utxo| utxo.value).sum::<u64>();
+    let change_amount = inputs_sum - challenge_data.amount - FEES;
+    let change = if change_amount < MIN_CHANGE {
+        None
+    } else {
+        Some(Amount::from_sat(change_amount))
+    };
+    let prevouts = selected_utxos
+        .iter()
+        .map(|utxo| {
+            (
+                OutPoint::new(
+                    Txid::from_str(&utxo.txid).expect("Failed to parse txid"),
+                    utxo.vout,
+                ),
+                Amount::from_sat(utxo.value),
+            )
+        })
+        .collect::<Vec<_>>();
+
+    let psbt = tx_builder
+        .build_challenge_tx(
+            &challenger_pubkey.into(),
+            challenge_data.challenge_outpoint,
+            selected_commitment.to_owned(),
+            LockTime::Blocks(
+                Height::from_consensus(100).expect("Failed to convert height to consensus"),
+            ),
+            Amount::from_sat(challenge_data.amount),
+            prevouts,
+            change,
+            None,
+        )
+        .expect("Failed to build challenge transaction");
 
     let pk_combined = public_key
         .inner
@@ -150,8 +186,7 @@ pub async fn run(
         vk: hex::encode(proof.vk()),
         acceptor_pubkey_hash: hex::encode(ripemd160_hash),
         third_rank_commitments: challenge_data.third_rank_commitments,
-        // TODO: Add PSBT
-        psbt: "".to_string(),
+        psbt: general_purpose::STANDARD.encode(psbt.serialize()),
     };
 
     let acceptor_json = serde_json::to_string(&acceptor_output)?;

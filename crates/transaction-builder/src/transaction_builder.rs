@@ -1,14 +1,18 @@
 use bitcoin::{
-    Amount, EcdsaSighashType, OutPoint, PublicKey, ScriptBuf, Transaction, TxIn, TxOut,
+    Amount, EcdsaSighashType, OutPoint, Psbt, PublicKey, ScriptBuf, Transaction, TxIn, TxOut,
     absolute::LockTime,
     key::Secp256k1,
+    psbt::PsbtSighashType,
     secp256k1::{All, Context, Message, SecretKey, Signing},
     sighash::SighashCache,
     transaction::Version,
 };
-use op_rand_types::FirstRankCommitment;
+use op_rand_types::{FirstRankCommitment, ThirdRankCommitment};
 
-use crate::{errors::TransactionError, scripts::create_p2wpkh_script};
+use crate::{
+    errors::TransactionError,
+    scripts::{create_closing_p2wsh_script, create_p2wpkh_script},
+};
 
 /// `TransactionBuilder` performs building transaction with stored public key, needed for scripts.
 /// Intended usage flow:
@@ -93,33 +97,65 @@ impl<C: Signing> TransactionBuilder<C> {
     /// Builds challenge transaction as PSBT and returns it. Needs an input from initial tx
     /// and Challenger's public key, which must be provided by the Challenger, as well as
     /// tweak value to combine with Acceptor's public key
-    // pub fn build_challenge_tx(
-    //     &self,
-    //     deposit_txin: TxIn,
-    //     input_from_initial: TxIn,
-    //     challenger_pubkey: &PublicKey,
-    //     tweak_value: &PublicKey,
-    //     amount: Amount,
-    //     lock_time: LockTime,
-    // ) -> Result<Psbt, TransactionError> {
-    //     let secp_public_key = self.secret_key.public_key(&self.ctx);
-    //     let public_key = PublicKey::new(secp_public_key);
-    //     let script =
-    //         create_close_output_script(challenger_pubkey, &public_key, tweak_value, lock_time)?;
+    pub fn build_challenge_tx(
+        &self,
+        challenger_pubkey: &PublicKey,
+        deposit_outpoint: OutPoint,
+        third_rank_commitment: ThirdRankCommitment,
+        lock_time: LockTime,
+        amount: Amount,
+        previous_outputs: Vec<(OutPoint, Amount)>,
+        change_amount: Option<Amount>,
+        change_pubkey: Option<PublicKey>,
+    ) -> Result<Psbt, TransactionError> {
+        let acceptor_public_key = self.secret_key.public_key(&self.ctx);
+        let tweaked_acceptor_pubkey = third_rank_commitment.combine(&acceptor_public_key)?;
 
-    //     let output = vec![TxOut {
-    //         value: amount,
-    //         script_pubkey: script,
-    //     }];
+        let challenge_script = create_closing_p2wsh_script(
+            challenger_pubkey,
+            &PublicKey::new(tweaked_acceptor_pubkey),
+            lock_time,
+        );
 
-    //     let closing_tx = create_tx(
-    //         vec![input_from_initial, deposit_txin],
-    //         output,
-    //         None, // while we put LockTime in the script, we don't need it in the tx itself
-    //     );
+        let mut outputs = vec![TxOut {
+            value: amount,
+            script_pubkey: ScriptBuf::new_p2wsh(&challenge_script.wscript_hash()),
+        }];
 
-    //     Ok(Psbt::from_unsigned_tx(closing_tx)?)
-    // }
+        if let Some(change_amount) = change_amount {
+            let change_script = create_p2wpkh_script(
+                &change_pubkey.unwrap_or(PublicKey::new(acceptor_public_key)),
+            )?;
+            outputs.push(TxOut {
+                value: change_amount,
+                script_pubkey: change_script,
+            });
+        }
+
+        let mut inputs = vec![TxIn {
+            previous_output: deposit_outpoint,
+            ..Default::default()
+        }];
+
+        let acceptor_inputs = previous_outputs
+            .iter()
+            .map(|(outpoint, _)| TxIn {
+                previous_output: *outpoint,
+                ..Default::default()
+            })
+            .collect::<Vec<_>>();
+
+        inputs.extend(acceptor_inputs);
+
+        let closing_tx = create_tx(inputs, outputs, None);
+        let mut psbt = Psbt::from_unsigned_tx(closing_tx)?;
+
+        for (input_index, (_, amount)) in previous_outputs.iter().enumerate() {
+            self.sign_psbt_input(&mut psbt, input_index + 1, *amount)?;
+        }
+
+        Ok(psbt)
+    }
 
     /// Signs single input inside `Transaction` by its index
     /// - `txout` refers to output being spent by this input
@@ -160,45 +196,47 @@ impl<C: Signing> TransactionBuilder<C> {
 
     /// Signs single input inside `Psbt` by its index
     /// - `txout` refers to output being spent by this input
-    // pub fn sign_psbt_input(
-    //     &self,
-    //     psbt: &mut Psbt,
-    //     input_index: usize,
-    //     txout: &TxOut,
-    // ) -> Result<(), TransactionError> {
-    //     let psbt_input = psbt
-    //         .inputs
-    //         .get_mut(input_index)
-    //         .ok_or(TransactionError::InputIndexOutOfBounds)?;
+    pub fn sign_psbt_input(
+        &self,
+        psbt: &mut Psbt,
+        input_index: usize,
+        amount: Amount,
+    ) -> Result<(), TransactionError> {
+        let psbt_input = psbt
+            .inputs
+            .get_mut(input_index)
+            .ok_or(TransactionError::InputIndexOutOfBounds)?;
 
-    //     let public_key = self.secret_key.public_key(&self.ctx);
-    //     let script_code = ScriptBuf::new_p2pkh(&PublicKey::new(public_key).pubkey_hash());
+        let public_key = self.secret_key.public_key(&self.ctx);
+        let script_pubkey = ScriptBuf::new_p2wpkh(&PublicKey::new(public_key).wpubkey_hash()?);
 
-    //     let mut sighasher = SighashCache::new(&psbt.unsigned_tx);
-    //     let sighash = sighasher.p2wpkh_signature_hash(
-    //         input_index,
-    //         &script_code,
-    //         txout.value,
-    //         EcdsaSighashType::All,
-    //     )?;
+        let mut sighasher = SighashCache::new(&psbt.unsigned_tx);
+        let sighash = sighasher.p2wpkh_signature_hash(
+            input_index,
+            &script_pubkey,
+            amount,
+            EcdsaSighashType::All,
+        )?;
 
-    //     let message = Message::from_digest_slice(sighash.as_ref())?;
-    //     let signature = self.secp.sign_ecdsa(&message, &self.private_key.inner);
+        let message = Message::from_digest_slice(sighash.as_ref())?;
+        let signature = self.ctx.sign_ecdsa(&message, &self.secret_key);
 
-    //     let final_signature = bitcoin::ecdsa::Signature {
-    //         signature,
-    //         sighash_type: EcdsaSighashType::All,
-    //     };
+        let final_signature = bitcoin::ecdsa::Signature {
+            signature,
+            sighash_type: EcdsaSighashType::All,
+        };
 
-    //     psbt_input.partial_sigs.insert(public_key, final_signature);
+        psbt_input
+            .partial_sigs
+            .insert(PublicKey::new(public_key), final_signature);
 
-    //     let psbt_sighash_type = PsbtSighashType::from(EcdsaSighashType::All);
-    //     if psbt_input.sighash_type.is_none() {
-    //         psbt_input.sighash_type = Some(psbt_sighash_type);
-    //     }
+        let psbt_sighash_type = PsbtSighashType::from(EcdsaSighashType::All);
+        if psbt_input.sighash_type.is_none() {
+            psbt_input.sighash_type = Some(psbt_sighash_type);
+        }
 
-    //     Ok(())
-    // }
+        Ok(())
+    }
 
     /// Signs multiple inputs with the same public and private keys,
     /// assuming the performer uses only outputs owned by the same public key

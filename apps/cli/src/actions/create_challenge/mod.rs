@@ -17,7 +17,7 @@ use tokio;
 
 use crate::{
     context::{Context, setup_progress_bar},
-    util::select_utxos,
+    util::{FEES, MIN_CHANGE, select_utxos},
 };
 
 #[derive(Args, Debug)]
@@ -91,7 +91,7 @@ pub async fn run(
     );
 
     let utxos = esplora_client.get_utxos(&address.to_string()).await?;
-    let selected_utxos = select_utxos(utxos, amount)?;
+    let selected_utxos = select_utxos(utxos, amount + FEES)?;
 
     let prover = BarretenbergProver::default();
 
@@ -136,7 +136,12 @@ pub async fn run(
     pb.finish_with_message("Challenger proof generated");
 
     let inputs_sum = selected_utxos.iter().map(|utxo| utxo.value).sum::<u64>();
-    let change = inputs_sum - amount - 300;
+    let change_amount = inputs_sum - amount - FEES;
+    let change = if change_amount < MIN_CHANGE {
+        None
+    } else {
+        Some(Amount::from_sat(change_amount))
+    };
     let prevouts = selected_utxos
         .iter()
         .map(|utxo| {
@@ -156,7 +161,7 @@ pub async fn run(
             random_first_rank_commitment.to_owned(),
             prevouts,
             Amount::from_sat(amount),
-            Some(Amount::from_sat(change)),
+            change,
             change_pubkey
                 .map(|pk| PublicKey::from_str(&pk).expect("Failed to parse change pubkey")),
         )
