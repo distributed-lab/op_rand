@@ -30,10 +30,6 @@ pub struct AcceptChallengeArgs {
     /// Number of the commitment to accept
     #[clap(long)]
     pub selected_commitment: u32,
-
-    /// Locktime
-    #[clap(long)]
-    pub locktime: u32,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -42,6 +38,7 @@ pub struct AcceptorData {
     pub acceptor_pubkey_hash: String,
     pub third_rank_commitments: [String; 2],
     pub psbt: String,
+    pub challenge_output_witness_script: String,
     pub proof: String,
     pub vk: String,
 }
@@ -51,7 +48,6 @@ pub async fn run(
         challenge_file,
         output,
         selected_commitment,
-        locktime,
     }: AcceptChallengeArgs,
     mut ctx: Context,
 ) -> eyre::Result<()> {
@@ -125,11 +121,11 @@ pub async fn run(
         })
         .collect::<Result<Vec<_>, eyre::Error>>()?;
 
-    let psbt = tx_builder.build_challenge_tx(
+    let (challenge_script, psbt) = tx_builder.build_challenge_tx(
         &challenger_pubkey.into(),
         challenge_data.deposit_outpoint,
         selected_commitment.to_owned(),
-        LockTime::Blocks(Height::from_consensus(locktime)?),
+        LockTime::Blocks(Height::from_consensus(challenge_data.locktime)?),
         Amount::from_sat(challenge_data.amount),
         prevouts,
         change,
@@ -172,6 +168,7 @@ pub async fn run(
         acceptor_pubkey_hash: hex::encode(ripemd160_hash),
         third_rank_commitments: challenge_data.third_rank_commitments,
         psbt: general_purpose::STANDARD.encode(psbt.serialize()),
+        challenge_output_witness_script: challenge_script.to_hex_string(),
     };
 
     let acceptor_json = serde_json::to_string(&acceptor_output)?;

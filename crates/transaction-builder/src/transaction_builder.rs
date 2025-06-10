@@ -1,9 +1,11 @@
 use bitcoin::{
-    Amount, EcdsaSighashType, OutPoint, Psbt, PublicKey, ScriptBuf, Transaction, TxIn, TxOut,
+    Amount, EcdsaSighashType, OutPoint, Psbt, PublicKey, ScriptBuf, Sequence, Transaction, TxIn,
+    TxOut,
     absolute::LockTime,
+    hashes::{Hash, sha256},
     key::{Secp256k1, Verification},
     psbt::PsbtSighashType,
-    secp256k1::{All, Context, Message, SecretKey, Signing},
+    secp256k1::{self, All, Context, Message, SecretKey, Signing},
     sighash::SighashCache,
     transaction::Version,
 };
@@ -104,7 +106,7 @@ impl<C: Signing + Verification> TransactionBuilder<C> {
         previous_outputs: Vec<(OutPoint, Amount)>,
         change_amount: Option<Amount>,
         change_pubkey: Option<PublicKey>,
-    ) -> Result<Psbt, TransactionError> {
+    ) -> Result<(ScriptBuf, Psbt), TransactionError> {
         let acceptor_public_key = self.secret_key.public_key(&self.ctx);
         let tweaked_acceptor_pubkey = third_rank_commitment.combine(&acceptor_public_key)?;
 
@@ -151,9 +153,10 @@ impl<C: Signing + Verification> TransactionBuilder<C> {
             self.sign_psbt_input(&mut psbt, input_index + 1, *amount, None)?;
         }
 
-        Ok(psbt)
+        Ok((challenge_script, psbt))
     }
 
+    /// Completes challenge transaction by signing the deposit input
     pub fn complete_challenge_tx(
         &self,
         mut psbt: Psbt,
@@ -173,6 +176,156 @@ impl<C: Signing + Verification> TransactionBuilder<C> {
 
         psbt.extract_tx()
             .map_err(|_e| TransactionError::ExtractTransactionFailed)
+    }
+
+    pub fn sweep_challenge_transaction_acceptor(
+        &self,
+        challenge_transaction: &Transaction,
+        challenger_pubkey: &PublicKey,
+        witness_script: &ScriptBuf,
+        recipient_pubkey: Option<PublicKey>,
+        fee: Amount,
+    ) -> Result<Transaction, TransactionError> {
+        let inputs = vec![TxIn {
+            previous_output: OutPoint::new(challenge_transaction.compute_txid(), 0),
+            ..Default::default()
+        }];
+
+        let outputs = vec![TxOut {
+            value: challenge_transaction.output[0].value - fee,
+            script_pubkey: create_p2wpkh_script(
+                &recipient_pubkey.unwrap_or(self.secret_key.public_key(&self.ctx).into()),
+            )?,
+        }];
+
+        let deposit_input_witness_stack = &challenge_transaction.input[0].witness;
+
+        let witness_pubkey = PublicKey::from_slice(&deposit_input_witness_stack[1])
+            .map_err(|_e| TransactionError::Secp256k1(secp256k1::Error::InvalidPublicKey))?;
+
+        // Extract the second rank commitment by subtracting challenger_pubkey from witness_pubkey
+        let negated_challenger_pubkey = challenger_pubkey.inner.negate(&self.ctx);
+        let second_rank_commitment = witness_pubkey.inner.combine(&negated_challenger_pubkey)?;
+        let second_rank_commitment_hash = sha256::Hash::hash(&second_rank_commitment.serialize());
+        let second_rank_commitment_sk =
+            SecretKey::from_slice(second_rank_commitment_hash.as_byte_array())?;
+
+        let tweaked_acceptor_sk = self
+            .secret_key
+            .add_tweak(&second_rank_commitment_sk.into())?;
+
+        let mut tx = create_tx(inputs, outputs, None);
+
+        self.sign_p2wsh_input_acceptor(
+            &mut tx,
+            0,
+            challenge_transaction.output[0].value,
+            &witness_script,
+            tweaked_acceptor_sk,
+        )?;
+
+        Ok(tx)
+    }
+
+    /// Signs a p2wsh input for the acceptor using the OP_IF (immediate) branch
+    fn sign_p2wsh_input_acceptor(
+        &self,
+        tx: &mut Transaction,
+        input_index: usize,
+        amount: Amount,
+        witness_script: &ScriptBuf,
+        tweaked_secret_key: SecretKey,
+    ) -> Result<(), TransactionError> {
+        let mut sighash_cache = SighashCache::new(&*tx);
+        let sighash = sighash_cache
+            .p2wsh_signature_hash(input_index, witness_script, amount, EcdsaSighashType::All)
+            .map_err(|_e| TransactionError::FailedToSignP2wshInput)?;
+
+        let message = Message::from_digest_slice(sighash.as_ref())?;
+        let signature = self.ctx.sign_ecdsa(&message, &tweaked_secret_key);
+
+        let mut final_signature = signature.serialize_der().to_vec();
+        final_signature.push(EcdsaSighashType::All as u8);
+
+        let tx_input = tx
+            .input
+            .get_mut(input_index)
+            .ok_or(TransactionError::InputIndexOutOfBounds)?;
+
+        // Build witness for OP_IF branch: <signature> <1> <witness_script>
+        tx_input.witness.clear();
+        tx_input.witness.push(final_signature); // Acceptor's signature with tweaked key
+        tx_input.witness.push(vec![1]); // Push 1 to take OP_IF branch
+        tx_input.witness.push(witness_script.to_bytes()); // The witness script
+
+        Ok(())
+    }
+
+    pub fn sweep_challenge_transaction_challenger(
+        &self,
+        challenge_transaction: &Transaction,
+        witness_script: &ScriptBuf,
+        lock_time: LockTime,
+        recipient_pubkey: Option<PublicKey>,
+        fee: Amount,
+    ) -> Result<Transaction, TransactionError> {
+        let challenger_pubkey = self.secret_key.public_key(&self.ctx);
+
+        let inputs = vec![TxIn {
+            previous_output: OutPoint::new(challenge_transaction.compute_txid(), 0),
+            sequence: Sequence::ENABLE_LOCKTIME_NO_RBF,
+            ..Default::default()
+        }];
+
+        let outputs = vec![TxOut {
+            value: challenge_transaction.output[0].value - fee,
+            script_pubkey: create_p2wpkh_script(
+                &recipient_pubkey.unwrap_or(PublicKey::new(challenger_pubkey)),
+            )?,
+        }];
+
+        let mut tx = create_tx(inputs, outputs, Some(lock_time));
+
+        self.sign_p2wsh_input_challenger(
+            &mut tx,
+            0,
+            challenge_transaction.output[0].value,
+            &witness_script,
+        )?;
+
+        Ok(tx)
+    }
+
+    fn sign_p2wsh_input_challenger(
+        &self,
+        tx: &mut Transaction,
+        input_index: usize,
+        amount: Amount,
+        witness_script: &ScriptBuf,
+    ) -> Result<(), TransactionError> {
+        let mut sighash_cache = SighashCache::new(&*tx);
+        let sighash = sighash_cache
+            .p2wsh_signature_hash(input_index, witness_script, amount, EcdsaSighashType::All)
+            .map_err(|_e| TransactionError::FailedToSignP2wshInput)?;
+
+        let message = Message::from_digest_slice(sighash.as_ref())?;
+        let signature = self.ctx.sign_ecdsa(&message, &self.secret_key);
+
+        let mut final_signature = signature.serialize_der().to_vec();
+        final_signature.push(EcdsaSighashType::All as u8);
+
+        let tx_input = tx
+            .input
+            .get_mut(input_index)
+            .ok_or(TransactionError::InputIndexOutOfBounds)?;
+
+        // Build witness for OP_ELSE branch: <signature> <0> <witness_script>
+        tx_input.witness.clear();
+        tx_input.witness.push(final_signature); // Challenger's signature
+        tx_input.witness.push(vec![]); // Push 0 to take OP_ELSE branch
+        tx_input.witness.push(witness_script.to_bytes()); // The witness script
+
+        Ok(())
     }
 
     /// Signs single input inside `Transaction` by its index

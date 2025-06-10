@@ -3,7 +3,6 @@ use bitcoin::{
     sighash::P2wpkhError,
 };
 use miniscript::psbt::SighashError;
-use std::fmt;
 
 #[derive(Debug, thiserror::Error)]
 pub enum TransactionError {
@@ -31,6 +30,8 @@ pub enum TransactionError {
     PsbtFinalizationFailed(Vec<miniscript::psbt::Error>),
     #[error("No deposit transaction stored.")]
     NoDepositTxStored,
+    #[error("Failed to sign p2wsh input.")]
+    FailedToSignP2wshInput,
 }
 
 impl From<UncompressedPublicKeyError> for TransactionError {

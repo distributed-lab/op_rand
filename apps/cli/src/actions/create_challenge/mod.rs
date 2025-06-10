@@ -40,6 +40,10 @@ pub struct CreateChallengeArgs {
     /// Output file path for the private challenge JSON
     #[clap(long, default_value = "private_challenger.json")]
     pub private_output: String,
+
+    /// Locktime for the challenge transaction.
+    #[clap(long)]
+    pub locktime: u32,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -52,6 +56,7 @@ pub struct PublicChallengerData {
     pub challenger_pubkey_hash: String,
     pub proof: String,
     pub vk: String,
+    pub locktime: u32,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -70,6 +75,7 @@ pub async fn run(
         public_output,
         private_output,
         change_pubkey,
+        locktime,
     }: CreateChallengeArgs,
     mut ctx: Context,
 ) -> eyre::Result<()> {
@@ -171,6 +177,7 @@ pub async fn run(
         challenger_pubkey_hash: hex::encode(ripemd160_hash.to_byte_array()),
         proof: hex::encode(proof.proof()),
         vk: hex::encode(proof.vk()),
+        locktime,
     };
 
     let json_output = serde_json::to_string_pretty(&public_challenge_output)?;

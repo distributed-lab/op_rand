@@ -2277,6 +2277,7 @@ dependencies = [
  "clap-verbosity",
  "color-eyre",
  "config",
+ "console",
  "eyre",
  "hex",
  "indicatif",

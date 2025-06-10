@@ -6,12 +6,14 @@ use tracing_log::AsTrace;
 
 use crate::{
     actions::{
-        accept_challenge::AcceptChallengeArgs, complete_challenge::CompleteChallengeArgs,
-        create_challenge::CreateChallengeArgs, try_spend::TrySpendArgs,
+        accept_challenge::AcceptChallengeArgs, challenge_info::ChallengeInfoArgs,
+        complete_challenge::CompleteChallengeArgs, create_challenge::CreateChallengeArgs,
+        try_spend::TrySpendArgs,
     },
     context::Context,
 };
 mod accept_challenge;
+mod challenge_info;
 mod complete_challenge;
 mod create_challenge;
 mod try_spend;
@@ -42,6 +44,9 @@ pub enum Commands {
 
     /// Try to spend a challenge
     TrySpend(TrySpendArgs),
+
+    /// Info about a challenge
+    Info(ChallengeInfoArgs),
 }
 
 impl Cli {
@@ -62,5 +67,6 @@ async fn execute_command(command: Commands, context: Context) -> eyre::Result<()
         Cmd::AcceptChallenge(cmd) => accept_challenge::run(cmd, context).await,
         Cmd::CompleteChallenge(cmd) => complete_challenge::run(cmd, context).await,
         Cmd::TrySpend(cmd) => try_spend::run(cmd, context).await,
+        Cmd::Info(cmd) => challenge_info::run(cmd).await,
     }
 }
