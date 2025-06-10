@@ -2,9 +2,11 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::{config::Config, esplora::EsploraClient};
+use bitcoin::secp256k1::Context as SecpContext;
 use bitcoin::secp256k1::{All, Secp256k1};
 use color_eyre::{eyre, eyre::Context as _};
 use indicatif::{ProgressBar, ProgressStyle};
+use op_rand_transaction_builder::TransactionBuilder;
 
 /// Context is a struct which holds all information that could be used globally, like info from
 /// configuration file. All the data taken from context is evaluated lazily, so it's not a problem
@@ -21,6 +23,9 @@ pub struct Context {
 
     /// Esplora client
     esplora_client: Option<EsploraClient>,
+
+    /// Transaction builder
+    transaction_builder: Option<TransactionBuilder<All>>,
 }
 
 impl Context {
@@ -32,6 +37,7 @@ impl Context {
             secp_ctx,
             config: None,
             esplora_client: None,
+            transaction_builder: None,
         }
     }
 
@@ -61,6 +67,19 @@ impl Context {
         self.esplora_client = Some(client.clone());
 
         Ok(client)
+    }
+
+    pub fn transaction_builder(&mut self) -> eyre::Result<TransactionBuilder<All>> {
+        if let Some(builder) = &self.transaction_builder {
+            return Ok(builder.clone());
+        }
+
+        let private_key = self.config()?.private_key;
+
+        let builder = TransactionBuilder::new(private_key.inner, self.secp_ctx().clone());
+        self.transaction_builder = Some(builder.clone());
+
+        Ok(builder)
     }
 }
 

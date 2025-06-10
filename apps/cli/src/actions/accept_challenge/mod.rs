@@ -10,7 +10,8 @@ use bitcoin::{
 };
 use clap::Args;
 use color_eyre::eyre;
-use op_rand_prover::{BarretenbergProver, OpRandProof, OpRandProver, ThirdRankCommitment};
+use op_rand_prover::{BarretenbergProver, OpRandProof, OpRandProver};
+use op_rand_types::ThirdRankCommitment;
 use serde::{Deserialize, Serialize};
 use std::{fs, str::FromStr};
 use tokio;

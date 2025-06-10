@@ -1,11 +1,8 @@
 use bitcoin::secp256k1;
+use op_rand_types::{FirstRankCommitment, ThirdRankCommitment};
 use secp256k1::{PublicKey, ecdsa};
 
-use crate::{
-    commitment::{FirstRankCommitment, ThirdRankCommitment},
-    errors::ProverError,
-    traits::OpRandProof,
-};
+use crate::{errors::ProverError, traits::OpRandProof};
 
 /// Prover trait for the OpRand protocol
 pub trait OpRandProver {

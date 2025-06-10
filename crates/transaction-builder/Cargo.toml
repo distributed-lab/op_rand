@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 bitcoin = { workspace = true }
+op-rand-types = { workspace = true }

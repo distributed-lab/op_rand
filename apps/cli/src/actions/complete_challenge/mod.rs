@@ -1,14 +1,14 @@
 use std::{fs, str::FromStr};
 
-use clap::Args;
-use color_eyre::eyre;
-use color_eyre::eyre::ensure;
-use op_rand_prover::{BarretenbergProver, OpRandProof, OpRandProver, ThirdRankCommitment};
-
 use crate::{
     actions::{accept_challenge::AcceptorData, create_challenge::PublicChallengerData},
     context::{Context, setup_progress_bar},
 };
+use clap::Args;
+use color_eyre::eyre;
+use color_eyre::eyre::ensure;
+use op_rand_prover::{BarretenbergProver, OpRandProof, OpRandProver};
+use op_rand_types::ThirdRankCommitment;
 
 #[derive(Args, Debug)]
 pub struct CompleteChallengeArgs {

@@ -1,5 +1,6 @@
 use bitcoin::{
-    Address, CompressedPublicKey, OutPoint, Txid,
+    Address, Amount, CompressedPublicKey, OutPoint, PublicKey, Txid,
+    consensus::Encodable,
     hashes::{Hash, ripemd160, sha256},
     secp256k1::rand::thread_rng,
 };
@@ -8,9 +9,10 @@ use color_eyre::{
     eyre,
     eyre::{OptionExt, ensure},
 };
-use op_rand_prover::{BarretenbergProver, Commitments, OpRandProver};
+use op_rand_prover::{BarretenbergProver, OpRandProver};
+use op_rand_types::Commitments;
 use serde::{Deserialize, Serialize};
-use std::fs;
+use std::{fs, str::FromStr};
 use tokio;
 
 use crate::{
@@ -27,6 +29,10 @@ pub struct CreateChallengeArgs {
     /// Number of commitments to create.s
     #[clap(long, default_value = "2")]
     pub commitments_count: u32,
+
+    /// Change public key.
+    #[clap(long)]
+    pub change_pubkey: Option<String>,
 
     /// Output file path for the challenge JSON
     #[clap(long, default_value = "challenger.json")]
@@ -64,6 +70,7 @@ pub async fn run(
         commitments_count,
         public_output,
         private_output,
+        change_pubkey,
     }: CreateChallengeArgs,
     mut ctx: Context,
 ) -> eyre::Result<()> {
@@ -74,6 +81,7 @@ pub async fn run(
 
     let cfg = ctx.config()?;
     let esplora_client = ctx.esplora_client()?;
+    let transaction_builder = ctx.transaction_builder()?;
     let private_key = cfg.private_key;
     let secp = ctx.secp_ctx();
     let public_key = private_key.public_key(secp).inner;
@@ -127,16 +135,32 @@ pub async fn run(
         .expect("Failed to generate challenger proof");
     pb.finish_with_message("Challenger proof generated");
 
-    let pb = setup_progress_bar("Creating a deposit transaction...".into());
+    let inputs_sum = selected_utxos.iter().map(|utxo| utxo.value).sum::<u64>();
+    let change = inputs_sum - amount - 300;
+    let prevouts = selected_utxos
+        .iter()
+        .map(|utxo| {
+            (
+                OutPoint::new(
+                    Txid::from_str(&utxo.txid).expect("Failed to parse txid"),
+                    utxo.vout,
+                ),
+                Amount::from_sat(utxo.value),
+            )
+        })
+        .collect::<Vec<_>>();
 
-    // TODO: This must be an actual deposit outpoint
-    let challenge_outpoint = OutPoint::new(
-        selected_utxos[0]
-            .txid
-            .parse::<Txid>()
-            .expect("Failed to parse txid"),
-        selected_utxos[0].vout,
-    );
+    let pb = setup_progress_bar("Creating a deposit transaction...".into());
+    let deposit_tx = transaction_builder
+        .build_deposit_transaction(
+            random_first_rank_commitment.to_owned(),
+            prevouts,
+            Amount::from_sat(amount),
+            Some(Amount::from_sat(change)),
+            change_pubkey
+                .map(|pk| PublicKey::from_str(&pk).expect("Failed to parse change pubkey")),
+        )
+        .expect("Failed to create deposit transaction");
 
     pb.finish_with_message("Deposit transaction created");
 
@@ -145,9 +169,8 @@ pub async fn run(
 
     let public_challenge_output = PublicChallengerData {
         id: id.clone(),
-        // TODO: this should be the amount of the deposit output, e.g. amount - fee
         amount,
-        challenge_outpoint,
+        challenge_outpoint: OutPoint::new(deposit_tx.compute_txid(), 0),
         third_rank_commitments: [
             hex::encode(third_rank_commitments[0].inner().serialize()),
             hex::encode(third_rank_commitments[1].inner().serialize()),
@@ -161,10 +184,15 @@ pub async fn run(
     let json_output = serde_json::to_string_pretty(&public_challenge_output)?;
     fs::write(&public_output, json_output)?;
 
+    let mut tx_bytes = Vec::new();
+    deposit_tx
+        .consensus_encode(&mut tx_bytes)
+        .expect("Failed to encode deposit transaction");
+
     let private_challenge_output = PrivateChallengerData {
         id,
         amount,
-        challenge_transaction: "Challenge tx".to_string(),
+        challenge_transaction: hex::encode(tx_bytes),
         first_rank_commitments: [
             hex::encode(first_rank_commitments[0].inner().0.secret_bytes()),
             hex::encode(first_rank_commitments[1].inner().0.secret_bytes()),

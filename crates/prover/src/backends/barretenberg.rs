@@ -5,9 +5,10 @@ use noir_rs::witness::from_vec_str_to_witness_map;
 
 use crate::{
     bytecode::{ACCEPTOR_CIRCUIT_BYTECODE, CHALLENGER_CIRCUIT_BYTECODE},
-    commitment::{FirstRankCommitment, ThirdRankCommitment},
     traits::{OpRandProof, OpRandProver},
 };
+
+use op_rand_types::{FirstRankCommitment, ThirdRankCommitment};
 
 #[derive(Debug, Clone, Default)]
 pub struct BarretenbergProver {
