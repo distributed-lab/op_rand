@@ -220,7 +220,7 @@ impl<C: Signing + Verification> TransactionBuilder<C> {
             &mut tx,
             0,
             challenge_transaction.output[0].value,
-            &witness_script,
+            witness_script,
             tweaked_acceptor_sk,
         )?;
 
@@ -290,7 +290,7 @@ impl<C: Signing + Verification> TransactionBuilder<C> {
             &mut tx,
             0,
             challenge_transaction.output[0].value,
-            &witness_script,
+            witness_script,
         )?;
 
         Ok(tx)

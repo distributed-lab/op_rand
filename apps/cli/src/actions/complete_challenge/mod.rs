@@ -6,7 +6,7 @@ use crate::{
         create_challenge::{PrivateChallengerData, PublicChallengerData},
     },
     context::{Context, setup_progress_bar},
-    ui::{self, CHECK, GEAR, SHIELD, RADIO, CHAIN},
+    ui::{self, CHAIN, CHECK, GEAR, RADIO, SHIELD},
 };
 use base64::{Engine as _, engine::general_purpose};
 use bitcoin::{Amount, Psbt, consensus::Encodable};
@@ -38,7 +38,10 @@ pub async fn run(
     }: CompleteChallengeArgs,
     mut ctx: Context,
 ) -> eyre::Result<()> {
-    println!("{}", ui::header("                      🏁 COMPLETING CHALLENGE 🏁"));
+    println!(
+        "{}",
+        ui::header("                      🏁 COMPLETING CHALLENGE 🏁")
+    );
 
     println!(
         "\n{} {}",
@@ -142,7 +145,9 @@ pub async fn run(
     println!(
         "{} {}",
         CHECK,
-        style("Acceptor proof verified successfully!").bold().green()
+        style("Acceptor proof verified successfully!")
+            .bold()
+            .green()
     );
 
     // TODO: cosign the PSBT and broadcast the transaction
@@ -199,7 +204,10 @@ pub async fn run(
     );
 
     // Success message
-    println!("\n{}", ui::success_footer("CHALLENGE COMPLETED SUCCESSFULLY!"));
+    println!(
+        "\n{}",
+        ui::success_footer("CHALLENGE COMPLETED SUCCESSFULLY!")
+    );
     println!("{}", ui::section_header("TRANSACTION DETAILS"));
     println!("│");
     println!(
@@ -211,7 +219,9 @@ pub async fn run(
     println!(
         "│   {} {}",
         style("TXID:").dim(),
-        style(&signed_challenge_transaction.compute_txid().to_string()).bright().white()
+        style(&signed_challenge_transaction.compute_txid().to_string())
+            .bright()
+            .white()
     );
 
     Ok(())
