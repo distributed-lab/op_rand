@@ -14,7 +14,7 @@ use op_rand_types::{FirstRankCommitment, ThirdRankCommitment};
 
 use crate::{
     errors::TransactionError,
-    scripts::{create_closing_p2wsh_script, create_p2wpkh_script},
+    scripts::{create_challenge_p2wsh_script, create_p2wpkh_script},
 };
 
 /// `TransactionBuilder` is used by both parties to build deposit and challenge transactions.
@@ -42,6 +42,7 @@ impl From<&SecretKey> for TransactionBuilder<All> {
 }
 
 impl<C: Signing + Verification> TransactionBuilder<C> {
+    /// Creates a new `TransactionBuilder` with the given secret key and context.
     pub fn new(secret_key: SecretKey, ctx: Secp256k1<C>) -> Self {
         TransactionBuilder { secret_key, ctx }
     }
@@ -60,6 +61,8 @@ impl<C: Signing + Verification> TransactionBuilder<C> {
     ) -> Result<Transaction, TransactionError> {
         let secp_public_key = self.secret_key.public_key(&self.ctx);
         let public_key = PublicKey::new(secp_public_key);
+
+        // Combine the chosen first rank commitment with the public key to get the challenge public key
         let challenge_pubkey = first_rank_commitment.combine(&public_key.inner)?;
         let deposit_script = create_p2wpkh_script(&challenge_pubkey.into())?;
 
@@ -92,9 +95,13 @@ impl<C: Signing + Verification> TransactionBuilder<C> {
         Ok(deposit_tx)
     }
 
-    /// Builds challenge transaction as PSBT and returns it. Needs an input from initial tx
-    /// and Challenger's public key, which must be provided by the Challenger, as well as
-    /// tweak value to combine with Acceptor's public key
+    /// This method should be used by the Acceptor to build a challenge transaction.
+    /// Needs a third rank commitment to combine with Acceptor's public key
+    ///
+    /// At this point, a PSBT is created and signed only by the Acceptor.
+    /// The PSBT is then returned to the Challenger to complete the transaction.
+    ///
+    /// Note: fees must be handled by the caller
     #[allow(clippy::too_many_arguments)]
     pub fn build_challenge_tx(
         &self,
@@ -108,9 +115,11 @@ impl<C: Signing + Verification> TransactionBuilder<C> {
         change_pubkey: Option<PublicKey>,
     ) -> Result<(ScriptBuf, Psbt), TransactionError> {
         let acceptor_public_key = self.secret_key.public_key(&self.ctx);
+
+        // Combine the chosen third rank commitment with the acceptor's public key to get the challenge public key
         let tweaked_acceptor_pubkey = third_rank_commitment.combine(&acceptor_public_key)?;
 
-        let challenge_script = create_closing_p2wsh_script(
+        let challenge_script = create_challenge_p2wsh_script(
             challenger_pubkey,
             &PublicKey::new(tweaked_acceptor_pubkey),
             lock_time,
@@ -146,17 +155,19 @@ impl<C: Signing + Verification> TransactionBuilder<C> {
 
         inputs.extend(acceptor_inputs);
 
-        let closing_tx = create_tx(inputs, outputs, None);
-        let mut psbt = Psbt::from_unsigned_tx(closing_tx)?;
+        let challenge_tx = create_tx(inputs, outputs, None);
+        let mut psbt = Psbt::from_unsigned_tx(challenge_tx)?;
 
         for (input_index, (_, amount)) in previous_outputs.iter().enumerate() {
+            // Increment input index by 1 to skip the deposit input
             self.sign_psbt_input(&mut psbt, input_index + 1, *amount, None)?;
         }
 
         Ok((challenge_script, psbt))
     }
 
-    /// Completes challenge transaction by signing the deposit input
+    /// This method should be used by the Challenger to complete the challenge transaction.
+    /// It signs the deposit input and finalizes the PSBT.
     pub fn complete_challenge_tx(
         &self,
         mut psbt: Psbt,
@@ -164,6 +175,7 @@ impl<C: Signing + Verification> TransactionBuilder<C> {
         deposit_input_index: usize,
         first_rank_commitment: FirstRankCommitment,
     ) -> Result<Transaction, TransactionError> {
+        // Sign the deposit transaction output using the chosen first rank commitment
         let deposit_signing_key = first_rank_commitment.add_tweak(&self.secret_key)?;
         self.sign_psbt_input(
             &mut psbt,
@@ -178,7 +190,10 @@ impl<C: Signing + Verification> TransactionBuilder<C> {
             .map_err(|_e| TransactionError::ExtractTransactionFailed)
     }
 
-    pub fn sweep_challenge_transaction_acceptor(
+    /// This method should be used by the Acceptor to sweep the challenge output.
+    /// It will result in a correct transaction only if the acceptor chose the correct
+    /// third rank commitment.
+    pub fn sweep_challenge_output_acceptor(
         &self,
         challenge_transaction: &Transaction,
         challenger_pubkey: &PublicKey,
@@ -198,8 +213,10 @@ impl<C: Signing + Verification> TransactionBuilder<C> {
             )?,
         }];
 
+        // Extract the witness stack from the deposit input
         let deposit_input_witness_stack = &challenge_transaction.input[0].witness;
 
+        // Extract the witness pubkey from the witness stack
         let witness_pubkey = PublicKey::from_slice(&deposit_input_witness_stack[1])
             .map_err(|_e| TransactionError::Secp256k1(secp256k1::Error::InvalidPublicKey))?;
 
@@ -210,6 +227,7 @@ impl<C: Signing + Verification> TransactionBuilder<C> {
         let second_rank_commitment_sk =
             SecretKey::from_slice(second_rank_commitment_hash.as_byte_array())?;
 
+        // Add the second rank commitment to the acceptor's secret key to get the tweaked secret key
         let tweaked_acceptor_sk = self
             .secret_key
             .add_tweak(&second_rank_commitment_sk.into())?;
@@ -261,7 +279,10 @@ impl<C: Signing + Verification> TransactionBuilder<C> {
         Ok(())
     }
 
-    pub fn sweep_challenge_transaction_challenger(
+    /// This method should be used by the Challenger to sweep the challenge output.
+    /// It will result in a correct transaction only after the time lock has expired and
+    /// the acceptor has not swept the challenge output.
+    pub fn sweep_challenge_output_challenger(
         &self,
         challenge_transaction: &Transaction,
         witness_script: &ScriptBuf,
@@ -286,6 +307,7 @@ impl<C: Signing + Verification> TransactionBuilder<C> {
 
         let mut tx = create_tx(inputs, outputs, Some(lock_time));
 
+        // Challenger sweep tx is signed by the original secret key
         self.sign_p2wsh_input_challenger(
             &mut tx,
             0,
@@ -296,6 +318,7 @@ impl<C: Signing + Verification> TransactionBuilder<C> {
         Ok(tx)
     }
 
+    /// Signs a p2wsh input for the challenger using the OP_ELSE (delayed) branch
     fn sign_p2wsh_input_challenger(
         &self,
         tx: &mut Transaction,
@@ -328,8 +351,7 @@ impl<C: Signing + Verification> TransactionBuilder<C> {
         Ok(())
     }
 
-    /// Signs single input inside `Transaction` by its index
-    /// - `txout` refers to output being spent by this input
+    /// Signs a single input inside `Transaction` by its index
     fn sign_single_input(
         &self,
         tx: &mut Transaction,
@@ -365,8 +387,8 @@ impl<C: Signing + Verification> TransactionBuilder<C> {
         Ok(())
     }
 
-    /// Signs single input inside `Psbt` by its index
-    /// - `txout` refers to output being spent by this input
+    /// Signs a single input inside `Psbt` by its index
+    /// If the secret key is not provided, the original secret key will be used
     fn sign_psbt_input(
         &self,
         psbt: &mut Psbt,
@@ -417,8 +439,7 @@ impl<C: Signing + Verification> TransactionBuilder<C> {
         Ok(())
     }
 
-    /// Signs multiple inputs with the same public and private keys,
-    /// assuming the performer uses only outputs owned by the same public key
+    /// Signs all transaction inputs with the same secret key
     fn sign_transaction(
         &self,
         tx: &mut Transaction,
@@ -436,6 +457,7 @@ impl<C: Signing + Verification> TransactionBuilder<C> {
     }
 }
 
+/// Creates a new `Transaction` with the given inputs, outputs and lock time
 fn create_tx(input: Vec<TxIn>, output: Vec<TxOut>, lock_time: Option<LockTime>) -> Transaction {
     Transaction {
         version: Version::ONE,

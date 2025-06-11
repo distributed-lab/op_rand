@@ -12,3 +12,4 @@ hex = { workspace = true }
 serde = { workspace = true }
 op-rand-types = { workspace = true }
 thiserror = { workspace = true }
+eyre = { workspace = true }

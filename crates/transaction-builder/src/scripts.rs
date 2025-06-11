@@ -7,14 +7,14 @@ use bitcoin::{
 
 use crate::errors::TransactionError;
 
-/// Creates PubKeyScript for P2WPKH with given `public_key`
+/// Creates a P2WPKH script from a public key.
 pub(crate) fn create_p2wpkh_script(public_key: &PublicKey) -> Result<ScriptBuf, TransactionError> {
     let witness_pubkey_hash = public_key.wpubkey_hash()?;
 
     Ok(ScriptBuf::new_p2wpkh(&witness_pubkey_hash))
 }
 
-/// Creates custom script for closing transaction output:  
+/// Creates a custom script for challenge transaction output:  
 /// ```_
 /// OP_IF
 ///     <P_a + H> OP_CHECKSIG
@@ -22,13 +22,14 @@ pub(crate) fn create_p2wpkh_script(public_key: &PublicKey) -> Result<ScriptBuf, 
 ///     <LT> OP_CHECKLOCKTIMEVERIFY OP_DROP  
 ///     <P_c> OP_CHECKSIG  
 /// OP_ENDIF
-pub(crate) fn create_closing_p2wsh_script(
+pub(crate) fn create_challenge_p2wsh_script(
     challenger_pubkey: &PublicKey,
     tweaked_acceptor_pubkey: &PublicKey,
     lock_time: LockTime,
 ) -> ScriptBuf {
     script::Builder::new()
         .push_opcode(opcodes::all::OP_IF)
+        // TODO: it should be a hash of the public key
         .push_key(tweaked_acceptor_pubkey)
         .push_opcode(opcodes::all::OP_CHECKSIG)
         .push_opcode(opcodes::all::OP_ELSE)

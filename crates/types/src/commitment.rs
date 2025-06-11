@@ -36,33 +36,39 @@ impl FromStr for FirstRankCommitment {
         })
     }
 }
+
 impl FirstRankCommitment {
+    /// Returns the secret key and public key of the commitment.
     pub fn inner(&self) -> (SecretKey, PublicKey) {
         (self.secret_key, self.public_key)
     }
 
+    /// Adds a tweak to the secret key of the commitment.
     pub fn add_tweak(&self, tweak: &SecretKey) -> Result<SecretKey, secp256k1::Error> {
         let scalar = Scalar::from(*tweak);
         self.secret_key.add_tweak(&scalar)
     }
 
+    /// Combines the public key of the commitment with a tweak.
     pub fn combine(&self, tweak: &PublicKey) -> Result<PublicKey, secp256k1::Error> {
         self.public_key.combine(tweak)
     }
 }
 
 /// Third rank commitment.
-/// This is the commitment that the acceptor uses to create the challenge transaction.
+/// This is the commitment that the acceptor uses to create a challenge transaction.
 #[derive(Debug, Clone)]
 pub struct ThirdRankCommitment {
     public_key: PublicKey,
 }
 
 impl ThirdRankCommitment {
+    /// Returns the public key of the commitment.
     pub fn inner(&self) -> PublicKey {
         self.public_key
     }
 
+    /// Combines the public key of the commitment with a tweak.
     pub fn combine(&self, tweak: &PublicKey) -> Result<PublicKey, secp256k1::Error> {
         self.public_key.combine(tweak)
     }
@@ -88,6 +94,7 @@ pub struct Commitments {
 }
 
 impl Commitments {
+    /// Generates a new random set of commitments.
     pub fn generate<C: Signing, R: rand::Rng + ?Sized>(
         ctx: &Secp256k1<C>,
         rng: &mut R,
@@ -136,6 +143,7 @@ impl Commitments {
         })
     }
 
+    /// Picks a random first rank commitment.
     pub fn pick_random_first_rank_commitment<R: rand::Rng + ?Sized>(
         &self,
         rng: &mut R,
@@ -143,6 +151,7 @@ impl Commitments {
         self.first_rank_commitments.iter().choose(rng)
     }
 
+    /// Picks a random third rank commitment.
     pub fn pick_random_third_rank_commitment<R: rand::Rng + ?Sized>(
         &self,
         rng: &mut R,
@@ -150,18 +159,22 @@ impl Commitments {
         self.third_rank_commitments.iter().choose(rng)
     }
 
+    /// Picks a first rank commitment by index.
     pub fn pick_first_rank_commitment(&self, i: usize) -> Option<&FirstRankCommitment> {
         self.first_rank_commitments.get(i)
     }
 
+    /// Picks a third rank commitment by index.
     pub fn pick_third_rank_commitment(&self, i: usize) -> Option<&ThirdRankCommitment> {
         self.third_rank_commitments.get(i)
     }
 
+    /// Returns the first rank commitments.
     pub fn first_rank_commitments(&self) -> &[FirstRankCommitment; COMMITMENTS_COUNT] {
         &self.first_rank_commitments
     }
 
+    /// Returns the third rank commitments.
     pub fn third_rank_commitments(&self) -> &[ThirdRankCommitment; COMMITMENTS_COUNT] {
         &self.third_rank_commitments
     }

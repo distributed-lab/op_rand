@@ -10,12 +10,14 @@ use crate::{
 
 use op_rand_types::{FirstRankCommitment, ThirdRankCommitment};
 
+/// Barretenberg prover implementation
 #[derive(Debug, Clone, Default)]
 pub struct BarretenbergProver {
     is_recursive: bool,
 }
 
 impl BarretenbergProver {
+    /// Creates a new `BarretenbergProver`
     pub fn new(is_recursive: bool) -> Self {
         Self { is_recursive }
     }

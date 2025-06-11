@@ -120,7 +120,7 @@ pub async fn run(
         let witness_script =
             bitcoin::ScriptBuf::from_hex(&acceptor_data.challenge_output_witness_script)?;
 
-        let sweep_tx = tx_builder.sweep_challenge_transaction_challenger(
+        let sweep_tx = tx_builder.sweep_challenge_output_challenger(
             &challenge_transaction,
             &witness_script,
             LockTime::Blocks(Height::from_consensus(challenger_data.locktime)?),
@@ -177,7 +177,7 @@ pub async fn run(
         let challenger_pubkey_bytes = hex::decode(&challenger_data.challenger_pubkey)?;
         let challenger_pubkey = bitcoin::PublicKey::from_slice(&challenger_pubkey_bytes)?;
 
-        let sweep_tx = tx_builder.sweep_challenge_transaction_acceptor(
+        let sweep_tx = tx_builder.sweep_challenge_output_acceptor(
             &challenge_transaction,
             &challenger_pubkey,
             &witness_script,

@@ -4,6 +4,7 @@ use bitcoin::{
 };
 use miniscript::psbt::SighashError;
 
+/// Transaction builder errors.
 #[derive(Debug, thiserror::Error)]
 pub enum TransactionError {
     #[error("Uncompressed public key error: {0}")]
