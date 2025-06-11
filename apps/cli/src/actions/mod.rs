@@ -13,6 +13,7 @@ use crate::{
     context::Context,
 };
 mod accept_challenge;
+mod balance;
 mod challenge_info;
 mod complete_challenge;
 mod create_challenge;
@@ -47,6 +48,9 @@ pub enum Commands {
 
     /// Info about a challenge
     Info(ChallengeInfoArgs),
+
+    /// Get wallet balance
+    Balance,
 }
 
 impl Cli {
@@ -68,5 +72,6 @@ async fn execute_command(command: Commands, context: Context) -> eyre::Result<()
         Cmd::CompleteChallenge(cmd) => complete_challenge::run(cmd, context).await,
         Cmd::TrySpend(cmd) => try_spend::run(cmd, context).await,
         Cmd::Info(cmd) => challenge_info::run(cmd).await,
+        Cmd::Balance => balance::run(context).await,
     }
 }
