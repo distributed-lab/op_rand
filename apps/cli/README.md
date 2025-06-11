@@ -213,6 +213,7 @@ op-rand-cli info --challenge-file my_challenge.json
 
 **Output:**
 Shows a formatted display including:
+
 - Challenge ID and amount (in satoshis and BTC)
 - Deposit transaction outpoint details
 - Locktime information
@@ -221,6 +222,43 @@ Shows a formatted display including:
 - Zero-knowledge proof and verification key information
 
 This command is useful for inspecting challenge files before accepting or completing them.
+
+### 6. balance
+
+Displays your wallet balance information, including confirmed and unconfirmed UTXOs. This command helps you check if you have sufficient funds before creating or accepting challenges.
+
+**Usage:**
+
+```bash
+op-rand-cli balance
+```
+
+**Arguments:**
+
+None - the command uses your configured wallet from `config.toml`.
+
+**Example:**
+
+```bash
+# Check your wallet balance
+op-rand-cli balance
+```
+
+**Output:**
+Shows a formatted display including:
+
+- Wallet address for your configured private key
+- Confirmed balance (from UTXOs in confirmed blocks)
+- Unconfirmed balance (from UTXOs in mempool)
+- Total balance (sum of confirmed and unconfirmed)
+- Individual UTXO details with transaction IDs and confirmation status
+- Block height information for confirmed UTXOs
+
+This command is essential for:
+
+- Verifying you have enough funds before creating challenges
+- Monitoring your wallet status during the challenge process
+- Debugging funding issues with detailed UTXO information
 
 ## Workflow Example
 
