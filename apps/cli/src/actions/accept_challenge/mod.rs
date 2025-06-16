@@ -16,6 +16,7 @@ use clap::Args;
 use color_eyre::eyre;
 use console::style;
 use op_rand_prover::{BarretenbergProver, OpRandProof, OpRandProver};
+use op_rand_transaction_builder::validate_deposit_transaction;
 use op_rand_types::ThirdRankCommitment;
 use serde::{Deserialize, Serialize};
 use std::{fs, str::FromStr};
@@ -41,7 +42,6 @@ pub struct AcceptorData {
     pub acceptor_pubkey_hash: String,
     pub third_rank_commitments: [String; 2],
     pub psbt: String,
-    pub challenge_output_witness_script: String,
     pub proof: String,
     pub vk: String,
 }
@@ -182,7 +182,23 @@ pub async fn run(
     let deposit_transaction: Transaction =
         deserialize_hex(&challenge_data.unsigned_deposit_transaction)?;
 
-    let (challenge_script, psbt) = tx_builder.build_challenge_tx(
+    println!(
+        "\n{} {}",
+        SHIELD,
+        style("Validating deposit transaction...").bold().blue()
+    );
+
+    validate_deposit_transaction(&deposit_transaction, &challenger_pubkey_hash, 0)?;
+
+    println!(
+        "{} {}",
+        CHECK,
+        style("Deposit transaction validated successfully!")
+            .bold()
+            .green()
+    );
+
+    let psbt = tx_builder.build_challenge_tx(
         &challenger_pubkey.into(),
         OutPoint::new(deposit_transaction.compute_txid(), 0),
         selected_commitment.to_owned(),
@@ -235,7 +251,6 @@ pub async fn run(
         acceptor_pubkey_hash: hex::encode(ripemd160_hash),
         third_rank_commitments: challenge_data.third_rank_commitments,
         psbt: general_purpose::STANDARD.encode(psbt.serialize()),
-        challenge_output_witness_script: challenge_script.to_hex_string(),
     };
 
     let acceptor_json = serde_json::to_string(&acceptor_output)?;

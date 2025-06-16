@@ -1,5 +1,5 @@
 use bitcoin::{
-    Amount, OutPoint, Psbt, PublicKey, ScriptBuf, Sequence, Transaction, TxIn, TxOut,
+    Amount, OutPoint, Psbt, PublicKey, ScriptBuf, Sequence, Transaction, TxIn, TxOut, WPubkeyHash,
     absolute::LockTime,
     hashes::{Hash, sha256},
     key::{Secp256k1, Verification},
@@ -118,15 +118,15 @@ impl<C: Signing + Verification> TransactionBuilder<C> {
         previous_outputs: Vec<(OutPoint, Amount)>,
         change_amount: Option<Amount>,
         change_pubkey: Option<PublicKey>,
-    ) -> Result<(ScriptBuf, Psbt), TransactionError> {
+    ) -> Result<Psbt, TransactionError> {
         // Combine the chosen third rank commitment with the acceptor's public key to get the challenge public key
         let tweaked_acceptor_pubkey = third_rank_commitment.combine(&self.public_key.inner)?;
 
         let challenge_script = create_challenge_p2wsh_script(
             challenger_pubkey,
-            &PublicKey::new(tweaked_acceptor_pubkey),
+            PublicKey::new(tweaked_acceptor_pubkey).wpubkey_hash()?,
             lock_time,
-        );
+        )?;
 
         let mut outputs = vec![TxOut {
             value: amount * 2,
@@ -165,7 +165,7 @@ impl<C: Signing + Verification> TransactionBuilder<C> {
                 .sign_psbt_input(&mut psbt, input_index + 1, *amount, None)?;
         }
 
-        Ok((challenge_script, psbt))
+        Ok(psbt)
     }
 
     /// This method should be used by the Challenger to complete the challenge transaction.
@@ -201,8 +201,8 @@ impl<C: Signing + Verification> TransactionBuilder<C> {
         &self,
         challenge_transaction: &Transaction,
         challenger_pubkey: &PublicKey,
-        witness_script: &ScriptBuf,
         recipient_pubkey: Option<PublicKey>,
+        lock_time: LockTime,
         fee: Amount,
     ) -> Result<Transaction, TransactionError> {
         let inputs = vec![TxIn {
@@ -235,8 +235,9 @@ impl<C: Signing + Verification> TransactionBuilder<C> {
             &mut tx,
             0,
             challenge_transaction.output[0].value,
-            witness_script,
+            challenger_pubkey,
             second_rank_commitment_sk,
+            lock_time,
         )?;
 
         Ok(tx)
@@ -248,8 +249,8 @@ impl<C: Signing + Verification> TransactionBuilder<C> {
     pub fn sweep_challenge_output_challenger(
         &self,
         challenge_transaction: &Transaction,
-        witness_script: &ScriptBuf,
         lock_time: LockTime,
+        acceptor_pubkey_hash: WPubkeyHash,
         recipient_pubkey: Option<PublicKey>,
         fee: Amount,
     ) -> Result<Transaction, TransactionError> {
@@ -265,13 +266,15 @@ impl<C: Signing + Verification> TransactionBuilder<C> {
         }];
 
         let mut tx = create_tx(inputs, outputs, Some(lock_time));
+        let witness_script =
+            create_challenge_p2wsh_script(&self.public_key, acceptor_pubkey_hash, lock_time)?;
 
         // Challenger sweep tx is signed by the original secret key
         self.signer.sign_p2wsh_input_challenger(
             &mut tx,
             0,
             challenge_transaction.output[0].value,
-            witness_script,
+            &witness_script,
         )?;
 
         Ok(tx)

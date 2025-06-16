@@ -9,12 +9,17 @@ use crate::{
     ui::{self, CHAIN, CHECK, GEAR, RADIO, SHIELD},
 };
 use base64::{Engine as _, engine::general_purpose};
-use bitcoin::{Amount, Psbt, consensus::Encodable};
+use bitcoin::{
+    Amount, Psbt, PublicKey, WPubkeyHash,
+    absolute::{Height, LockTime},
+    consensus::encode,
+};
 use clap::Args;
 use color_eyre::eyre;
 use color_eyre::eyre::ensure;
 use console::style;
 use op_rand_prover::{BarretenbergProver, OpRandProof, OpRandProver};
+use op_rand_transaction_builder::validate_challenge_psbt;
 use op_rand_types::{FirstRankCommitment, ThirdRankCommitment};
 
 #[derive(Args, Debug)]
@@ -150,7 +155,6 @@ pub async fn run(
             .green()
     );
 
-    // TODO: cosign the PSBT and broadcast the transaction
     let esplora_client = ctx.esplora_client()?;
     let transaction_builder = ctx.transaction_builder()?;
     let psbt_bytes = general_purpose::STANDARD.decode(&acceptor_data.psbt)?;
@@ -158,6 +162,28 @@ pub async fn run(
     let psbt = Psbt::deserialize(&psbt_bytes)?;
     let selected_first_rank_commitment =
         FirstRankCommitment::from_str(&challenger_private_data.selected_first_rank_commitment)?;
+
+    println!(
+        "\n{} {}",
+        SHIELD,
+        style("Validating challenge PSBT...").bold().blue()
+    );
+
+    validate_challenge_psbt(
+        &psbt,
+        WPubkeyHash::from_str(&acceptor_data.acceptor_pubkey_hash)?,
+        PublicKey::from_str(&challenger_data.challenger_pubkey)?,
+        LockTime::Blocks(Height::from_consensus(challenger_data.locktime)?),
+        0,
+    )?;
+
+    println!(
+        "{} {}",
+        CHECK,
+        style("Challenge PSBT validated successfully!")
+            .bold()
+            .green()
+    );
 
     println!(
         "\n{} {}",
@@ -173,9 +199,7 @@ pub async fn run(
     )?;
 
     let deposit_transaction = challenger_private_data.deposit_transaction;
-    let mut challenge_transaction_bytes = Vec::new();
-    signed_challenge_transaction.consensus_encode(&mut challenge_transaction_bytes)?;
-    let challenge_transaction = hex::encode(challenge_transaction_bytes);
+    let challenge_transaction = encode::serialize_hex(&signed_challenge_transaction);
 
     println!(
         "\n{} {}",

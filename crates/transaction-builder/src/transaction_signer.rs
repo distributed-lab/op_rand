@@ -1,11 +1,12 @@
 use bitcoin::{
     Amount, EcdsaSighashType, Psbt, PublicKey, ScriptBuf, Transaction,
+    absolute::LockTime,
     secp256k1::{self, All, Context, Message, Scalar, SecretKey, Signing},
     sighash::SighashCache,
 };
 use op_rand_types::FirstRankCommitment;
 
-use crate::errors::TransactionError;
+use crate::{errors::TransactionError, scripts::create_challenge_p2wsh_script};
 
 /// `TransactionSigner` handles all transaction signing operations
 #[derive(Debug, Clone)]
@@ -42,22 +43,34 @@ impl<C: Signing> TransactionSigner<C> {
         &self.ctx
     }
 
-    /// Signs a p2wsh input for the acceptor using the OP_IF (immediate) branch
+    /// Signs a P2WSH input for the acceptor using the OP_IF (immediate) branch,
+    /// assuming the witness script verifies the hash160 of the public key before signature.
     pub fn sign_p2wsh_input_acceptor(
         &self,
         tx: &mut Transaction,
         input_index: usize,
         amount: Amount,
-        witness_script: &ScriptBuf,
+        challenger_pubkey: &PublicKey,
         second_rank_commitment: SecretKey,
+        locktime: LockTime,
     ) -> Result<(), TransactionError> {
-        let mut sighash_cache = SighashCache::new(&*tx);
-        let sighash = sighash_cache
-            .p2wsh_signature_hash(input_index, witness_script, amount, EcdsaSighashType::All)
-            .map_err(|_e| TransactionError::FailedToSignP2wshInput)?;
-
         let scalar = Scalar::from(second_rank_commitment);
         let signing_key = self.secret_key.add_tweak(&scalar)?;
+
+        let tweaked_pubkey = signing_key.public_key(&self.ctx);
+        let tweaked_acceptor_pubkey_hash = PublicKey::new(tweaked_pubkey).wpubkey_hash()?;
+
+        let witness_script = create_challenge_p2wsh_script(
+            challenger_pubkey,
+            tweaked_acceptor_pubkey_hash,
+            locktime,
+        )?;
+
+        let mut sighash_cache = SighashCache::new(&*tx);
+        let sighash = sighash_cache
+            .p2wsh_signature_hash(input_index, &witness_script, amount, EcdsaSighashType::All)
+            .map_err(|_e| TransactionError::FailedToSignP2wshInput)?;
+
         let message = Message::from_digest_slice(sighash.as_ref())?;
         let signature = self.ctx.sign_ecdsa(&message, &signing_key);
 
@@ -69,11 +82,12 @@ impl<C: Signing> TransactionSigner<C> {
             .get_mut(input_index)
             .ok_or(TransactionError::InputIndexOutOfBounds)?;
 
-        // Build witness for OP_IF branch: <signature> <1> <witness_script>
+        // Correct witness: <signature> <pubkey_bytes> <1> <witness_script>
         tx_input.witness.clear();
-        tx_input.witness.push(final_signature); // Acceptor's signature with tweaked key
-        tx_input.witness.push(vec![1]); // Push 1 to take OP_IF branch
-        tx_input.witness.push(witness_script.to_bytes()); // The witness script
+        tx_input.witness.push(final_signature);
+        tx_input.witness.push(tweaked_pubkey.serialize());
+        tx_input.witness.push(vec![1]); // Select OP_IF
+        tx_input.witness.push(witness_script.to_bytes());
 
         Ok(())
     }

@@ -1,7 +1,7 @@
 use std::{fs, str::FromStr};
 
 use bitcoin::{
-    Amount, PublicKey, Transaction,
+    Amount, PublicKey, Transaction, WPubkeyHash,
     absolute::{Height, LockTime},
     consensus::Decodable,
 };
@@ -117,13 +117,10 @@ pub async fn run(
                 .blue()
         );
 
-        let witness_script =
-            bitcoin::ScriptBuf::from_hex(&acceptor_data.challenge_output_witness_script)?;
-
         let sweep_tx = tx_builder.sweep_challenge_output_challenger(
             &challenge_transaction,
-            &witness_script,
             LockTime::Blocks(Height::from_consensus(challenger_data.locktime)?),
+            WPubkeyHash::from_str(&acceptor_data.acceptor_pubkey_hash)?,
             recipient_pubkey,
             fee_amount,
         )?;
@@ -171,17 +168,11 @@ pub async fn run(
                 .blue()
         );
 
-        let witness_script_bytes = hex::decode(&acceptor_data.challenge_output_witness_script)?;
-        let witness_script = bitcoin::ScriptBuf::from_bytes(witness_script_bytes);
-
-        let challenger_pubkey_bytes = hex::decode(&challenger_data.challenger_pubkey)?;
-        let challenger_pubkey = bitcoin::PublicKey::from_slice(&challenger_pubkey_bytes)?;
-
         let sweep_tx = tx_builder.sweep_challenge_output_acceptor(
             &challenge_transaction,
-            &challenger_pubkey,
-            &witness_script,
+            &PublicKey::from_str(&challenger_data.challenger_pubkey)?,
             recipient_pubkey,
+            LockTime::Blocks(Height::from_consensus(challenger_data.locktime)?),
             fee_amount,
         )?;
 

@@ -1,6 +1,6 @@
 use bitcoin::{
     Address, Amount, CompressedPublicKey, OutPoint, PublicKey, Txid,
-    consensus::{Encodable, encode},
+    consensus::encode,
     hashes::{Hash, ripemd160, sha256},
     secp256k1::rand::thread_rng,
 };
@@ -56,9 +56,9 @@ pub struct PublicChallengerData {
     pub third_rank_commitments: [String; 2],
     pub challenger_pubkey: String,
     pub challenger_pubkey_hash: String,
+    pub locktime: u32,
     pub proof: String,
     pub vk: String,
-    pub locktime: u32,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -236,7 +236,7 @@ pub async fn run(
     let public_challenge_output = PublicChallengerData {
         id: id.clone(),
         amount,
-        unsigned_deposit_transaction: hex::encode(encode::serialize_hex(&deposit_tx)),
+        unsigned_deposit_transaction: encode::serialize_hex(&deposit_tx),
         third_rank_commitments: [
             hex::encode(third_rank_commitments[0].inner().serialize()),
             hex::encode(third_rank_commitments[1].inner().serialize()),
@@ -251,13 +251,10 @@ pub async fn run(
     let json_output = serde_json::to_string_pretty(&public_challenge_output)?;
     fs::write(&public_output, json_output)?;
 
-    let mut tx_bytes = Vec::new();
-    deposit_tx.consensus_encode(&mut tx_bytes)?;
-
     let private_challenge_output = PrivateChallengerData {
         id: id.clone(),
         amount,
-        deposit_transaction: hex::encode(tx_bytes),
+        deposit_transaction: encode::serialize_hex(&deposit_tx),
         first_rank_commitments: [
             hex::encode(first_rank_commitments[0].inner().0.secret_bytes()),
             hex::encode(first_rank_commitments[1].inner().0.secret_bytes()),
