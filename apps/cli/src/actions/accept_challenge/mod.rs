@@ -6,8 +6,9 @@ use crate::{
 };
 use base64::{Engine as _, engine::general_purpose};
 use bitcoin::{
-    Address, Amount, CompressedPublicKey, OutPoint, Txid,
+    Address, Amount, CompressedPublicKey, OutPoint, Transaction, Txid,
     absolute::{Height, LockTime},
+    consensus::encode::deserialize_hex,
     hashes::{Hash, ripemd160, sha256},
     secp256k1::{Message, PublicKey, SecretKey},
 };
@@ -178,9 +179,12 @@ pub async fn run(
         style("Building challenge transaction...").bold().blue()
     );
 
+    let deposit_transaction: Transaction =
+        deserialize_hex(&challenge_data.unsigned_deposit_transaction)?;
+
     let (challenge_script, psbt) = tx_builder.build_challenge_tx(
         &challenger_pubkey.into(),
-        challenge_data.deposit_outpoint,
+        OutPoint::new(deposit_transaction.compute_txid(), 0),
         selected_commitment.to_owned(),
         LockTime::Blocks(Height::from_consensus(challenge_data.locktime)?),
         Amount::from_sat(challenge_data.amount),

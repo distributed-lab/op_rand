@@ -3,12 +3,14 @@ use console::{Emoji, style};
 pub static CHECK: Emoji<'_, '_> = Emoji("✅ ", "");
 pub static GEAR: Emoji<'_, '_> = Emoji("⚙️ ", "");
 pub static SHIELD: Emoji<'_, '_> = Emoji("🛡️ ", "");
-pub static KEY: Emoji<'_, '_> = Emoji("�� ", "");
+pub static KEY: Emoji<'_, '_> = Emoji("🔑 ", "");
 pub static CHAIN: Emoji<'_, '_> = Emoji("⛓️ ", "");
 pub static RADIO: Emoji<'_, '_> = Emoji("📡 ", "");
 pub static SPARKLES: Emoji<'_, '_> = Emoji("✨ ", "");
 pub static CLOCK: Emoji<'_, '_> = Emoji("⏰ ", "");
 pub static TARGET: Emoji<'_, '_> = Emoji("🎯 ", "");
+pub static ROCKET: Emoji<'_, '_> = Emoji("🚀 ", "");
+pub static LOCK: Emoji<'_, '_> = Emoji("🔒 ", "");
 
 pub fn header(text: &str) -> String {
     format!(

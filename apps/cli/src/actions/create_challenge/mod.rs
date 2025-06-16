@@ -1,6 +1,6 @@
 use bitcoin::{
     Address, Amount, CompressedPublicKey, OutPoint, PublicKey, Txid,
-    consensus::Encodable,
+    consensus::{Encodable, encode},
     hashes::{Hash, ripemd160, sha256},
     secp256k1::rand::thread_rng,
 };
@@ -52,7 +52,7 @@ pub struct CreateChallengeArgs {
 pub struct PublicChallengerData {
     pub id: String,
     pub amount: u64,
-    pub deposit_outpoint: OutPoint,
+    pub unsigned_deposit_transaction: String,
     pub third_rank_commitments: [String; 2],
     pub challenger_pubkey: String,
     pub challenger_pubkey_hash: String,
@@ -236,7 +236,7 @@ pub async fn run(
     let public_challenge_output = PublicChallengerData {
         id: id.clone(),
         amount,
-        deposit_outpoint: OutPoint::new(deposit_tx.compute_txid(), 0),
+        unsigned_deposit_transaction: hex::encode(encode::serialize_hex(&deposit_tx)),
         third_rank_commitments: [
             hex::encode(third_rank_commitments[0].inner().serialize()),
             hex::encode(third_rank_commitments[1].inner().serialize()),
