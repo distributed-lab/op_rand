@@ -163,21 +163,19 @@ pub async fn run(
 
     let third_rank_commitments = commitments.third_rank_commitments();
 
-    let sha256_hash = sha256::Hash::hash(&tweaked_pk.serialize());
-    let ripemd160_hash = ripemd160::Hash::hash(sha256_hash.as_byte_array());
-
     println!(
         "{} {} third-rank commitments generated",
         CHECK,
         style("2").bold().green()
     );
 
+    let challenger_pubkey_hash = PublicKey::new(tweaked_pk).wpubkey_hash()?.to_byte_array();
     let pb = setup_progress_bar("Generating the challenger proof...".into());
     let proof = prover.generate_challenger_proof(
         first_rank_commitments.to_owned(),
         third_rank_commitments.to_owned(),
         &public_key,
-        ripemd160_hash.to_byte_array(),
+        challenger_pubkey_hash,
     )?;
     pb.finish_with_message("Challenger proof generated");
 
@@ -242,7 +240,7 @@ pub async fn run(
             hex::encode(third_rank_commitments[1].inner().serialize()),
         ],
         challenger_pubkey: hex::encode(public_key.serialize()),
-        challenger_pubkey_hash: hex::encode(ripemd160_hash.to_byte_array()),
+        challenger_pubkey_hash: hex::encode(challenger_pubkey_hash),
         proof: hex::encode(proof.proof()),
         vk: hex::encode(proof.vk()),
         locktime,

@@ -6,11 +6,11 @@ use crate::{
 };
 use base64::{Engine as _, engine::general_purpose};
 use bitcoin::{
-    Address, Amount, CompressedPublicKey, OutPoint, Transaction, Txid,
+    Address, Amount, CompressedPublicKey, OutPoint, PublicKey, Transaction, Txid,
     absolute::{Height, LockTime},
     consensus::encode::deserialize_hex,
-    hashes::{Hash, ripemd160, sha256},
-    secp256k1::{Message, PublicKey, SecretKey},
+    hashes::{Hash, sha256},
+    secp256k1::{Message, SecretKey},
 };
 use clap::Args;
 use color_eyre::eyre;
@@ -111,7 +111,7 @@ pub async fn run(
 
     prover.verify_challenger_proof(
         commitments.clone(),
-        &challenger_pubkey,
+        &challenger_pubkey.inner,
         challenger_pubkey_hash,
         &proof_data,
     )?;
@@ -210,12 +210,10 @@ pub async fn run(
     )?;
 
     let pk_combined = public_key.inner.combine(&selected_commitment.inner())?;
-
-    let sha256_hash = sha256::Hash::hash(&pk_combined.serialize());
-    let ripemd160_hash = ripemd160::Hash::hash(sha256_hash.as_byte_array());
+    let pubkey_hash = PublicKey::new(pk_combined).wpubkey_hash()?;
 
     let message =
-        Message::from_digest(sha256::Hash::hash(ripemd160_hash.as_byte_array()).to_byte_array());
+        Message::from_digest(sha256::Hash::hash(pubkey_hash.as_byte_array()).to_byte_array());
     let sk = SecretKey::from_slice(&private_key.to_bytes())?;
 
     let sig = secp.sign_ecdsa(&message, &sk);
@@ -233,7 +231,7 @@ pub async fn run(
     let proof = prover.generate_acceptor_proof(
         &public_key.inner,
         &sig,
-        ripemd160_hash.to_byte_array(),
+        pubkey_hash.to_byte_array(),
         commitments,
     )?;
     pb.finish_with_message("Acceptor proof generated");
@@ -248,7 +246,7 @@ pub async fn run(
         id: challenge_data.id.clone(),
         proof: hex::encode(proof.proof()),
         vk: hex::encode(proof.vk()),
-        acceptor_pubkey_hash: hex::encode(ripemd160_hash),
+        acceptor_pubkey_hash: hex::encode(pubkey_hash.to_byte_array()),
         third_rank_commitments: challenge_data.third_rank_commitments,
         psbt: general_purpose::STANDARD.encode(psbt.serialize()),
     };
