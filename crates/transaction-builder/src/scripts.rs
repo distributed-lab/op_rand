@@ -36,7 +36,7 @@ pub(crate) fn create_p2wpkh_script(public_key: &PublicKey) -> Result<ScriptBuf, 
 /// ```
 pub(crate) fn create_challenge_p2wsh_script(
     challenger_pubkey: &PublicKey,
-    tweaked_acceptor_pubkey_hash: WPubkeyHash,
+    tweaked_acceptor_pubkey_hash: &WPubkeyHash,
     lock_time: LockTime,
 ) -> Result<ScriptBuf, TransactionError> {
     let script = script::Builder::new()

@@ -62,7 +62,7 @@ impl<C: Signing> TransactionSigner<C> {
 
         let witness_script = create_challenge_p2wsh_script(
             challenger_pubkey,
-            tweaked_acceptor_pubkey_hash,
+            &tweaked_acceptor_pubkey_hash,
             locktime,
         )?;
 

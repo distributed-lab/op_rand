@@ -124,7 +124,7 @@ impl<C: Signing + Verification> TransactionBuilder<C> {
 
         let challenge_script = create_challenge_p2wsh_script(
             challenger_pubkey,
-            PublicKey::new(tweaked_acceptor_pubkey).wpubkey_hash()?,
+            &PublicKey::new(tweaked_acceptor_pubkey).wpubkey_hash()?,
             lock_time,
         )?;
 
@@ -267,7 +267,7 @@ impl<C: Signing + Verification> TransactionBuilder<C> {
 
         let mut tx = create_tx(inputs, outputs, Some(lock_time));
         let witness_script =
-            create_challenge_p2wsh_script(&self.public_key, acceptor_pubkey_hash, lock_time)?;
+            create_challenge_p2wsh_script(&self.public_key, &acceptor_pubkey_hash, lock_time)?;
 
         // Challenger sweep tx is signed by the original secret key
         self.signer.sign_p2wsh_input_challenger(

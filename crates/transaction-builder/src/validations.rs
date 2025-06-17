@@ -1,6 +1,4 @@
-use bitcoin::{
-    Psbt, PublicKey, ScriptBuf, Transaction, WPubkeyHash, absolute::LockTime, hashes::Hash,
-};
+use bitcoin::{Psbt, PublicKey, ScriptBuf, Transaction, WPubkeyHash, absolute::LockTime};
 use eyre::ensure;
 
 use crate::scripts::create_challenge_p2wsh_script;
@@ -13,13 +11,12 @@ use crate::scripts::create_challenge_p2wsh_script;
 /// can be used as a challenge transaction input.
 pub fn validate_deposit_transaction(
     transaction: &Transaction,
-    challenger_pubkey_hash: &[u8],
+    challenger_pubkey_hash: &WPubkeyHash,
     output_index: usize,
 ) -> eyre::Result<()> {
     let output = transaction.output[output_index].clone();
     let output_script = output.script_pubkey;
-    let pubkey_hash = WPubkeyHash::from_slice(challenger_pubkey_hash)?;
-    let expected_script = ScriptBuf::new_p2wpkh(&pubkey_hash);
+    let expected_script = ScriptBuf::new_p2wpkh(challenger_pubkey_hash);
 
     ensure!(
         output_script == expected_script,
@@ -37,7 +34,7 @@ pub fn validate_deposit_transaction(
 /// challenge output.
 pub fn validate_challenge_psbt(
     psbt: &Psbt,
-    acceptor_pubkey_hash: WPubkeyHash,
+    acceptor_pubkey_hash: &WPubkeyHash,
     challenger_pubkey: PublicKey,
     locktime: LockTime,
     output_index: usize,

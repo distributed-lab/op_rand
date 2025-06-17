@@ -1,7 +1,5 @@
 use bitcoin::{
-    Address, Amount, CompressedPublicKey, OutPoint, PublicKey, Txid,
-    consensus::encode,
-    hashes::{Hash, ripemd160, sha256},
+    Address, Amount, CompressedPublicKey, OutPoint, PublicKey, Txid, consensus::encode,
     secp256k1::rand::thread_rng,
 };
 use clap::Args;
@@ -169,13 +167,13 @@ pub async fn run(
         style("2").bold().green()
     );
 
-    let challenger_pubkey_hash = PublicKey::new(tweaked_pk).wpubkey_hash()?.to_byte_array();
+    let challenger_pubkey_hash = PublicKey::new(tweaked_pk).wpubkey_hash()?;
     let pb = setup_progress_bar("Generating the challenger proof...".into());
     let proof = prover.generate_challenger_proof(
         first_rank_commitments.to_owned(),
         third_rank_commitments.to_owned(),
         &public_key,
-        challenger_pubkey_hash,
+        &challenger_pubkey_hash,
     )?;
     pb.finish_with_message("Challenger proof generated");
 

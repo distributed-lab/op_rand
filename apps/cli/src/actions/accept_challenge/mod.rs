@@ -6,7 +6,7 @@ use crate::{
 };
 use base64::{Engine as _, engine::general_purpose};
 use bitcoin::{
-    Address, Amount, CompressedPublicKey, OutPoint, PublicKey, Transaction, Txid,
+    Address, Amount, CompressedPublicKey, OutPoint, PublicKey, Transaction, Txid, WPubkeyHash,
     absolute::{Height, LockTime},
     consensus::encode::deserialize_hex,
     hashes::{Hash, sha256},
@@ -96,9 +96,7 @@ pub async fn run(
         .map_err(|_| eyre::eyre!("Expected exactly 2 commitments"))?;
 
     let challenger_pubkey = PublicKey::from_str(&challenge_data.challenger_pubkey)?;
-    let challenger_pubkey_hash = hex::decode(&challenge_data.challenger_pubkey_hash)?
-        .try_into()
-        .map_err(|_| eyre::eyre!("Failed to convert challenger public key hash to array"))?;
+    let challenger_pubkey_hash = WPubkeyHash::from_str(&challenge_data.challenger_pubkey_hash)?;
     let proof = hex::decode(&challenge_data.proof)?;
     let vk = hex::decode(&challenge_data.vk)?;
     let proof_data = OpRandProof::new(proof, vk);
@@ -112,7 +110,7 @@ pub async fn run(
     prover.verify_challenger_proof(
         commitments.clone(),
         &challenger_pubkey.inner,
-        challenger_pubkey_hash,
+        &challenger_pubkey_hash,
         &proof_data,
     )?;
 
@@ -199,7 +197,7 @@ pub async fn run(
     );
 
     let psbt = tx_builder.build_challenge_tx(
-        &challenger_pubkey.into(),
+        &challenger_pubkey,
         OutPoint::new(deposit_transaction.compute_txid(), 0),
         selected_commitment.to_owned(),
         LockTime::Blocks(Height::from_consensus(challenge_data.locktime)?),
@@ -228,12 +226,8 @@ pub async fn run(
     .await?;
     pb.finish_with_message("Acceptor circuit is set up");
     let pb = setup_progress_bar("Generating acceptor proof...".into());
-    let proof = prover.generate_acceptor_proof(
-        &public_key.inner,
-        &sig,
-        pubkey_hash.to_byte_array(),
-        commitments,
-    )?;
+    let proof =
+        prover.generate_acceptor_proof(&public_key.inner, &sig, &pubkey_hash, commitments)?;
     pb.finish_with_message("Acceptor proof generated");
 
     println!(

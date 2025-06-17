@@ -83,7 +83,7 @@ pub async fn run(
     );
 
     let prover = BarretenbergProver::default();
-    let acceptor_pubkey_hash = hex::decode(&acceptor_data.acceptor_pubkey_hash)?;
+    let acceptor_pubkey_hash = WPubkeyHash::from_str(&acceptor_data.acceptor_pubkey_hash)?;
 
     println!(
         "\n{} {}",
@@ -138,9 +138,7 @@ pub async fn run(
     );
 
     prover.verify_acceptor_proof(
-        acceptor_pubkey_hash
-            .try_into()
-            .map_err(|_| eyre::eyre!("Failed to convert pubkey hash to array"))?,
+        &acceptor_pubkey_hash,
         challenger_commitments
             .try_into()
             .map_err(|_| eyre::eyre!("Failed to convert commitments to array"))?,
@@ -171,7 +169,7 @@ pub async fn run(
 
     validate_challenge_psbt(
         &psbt,
-        WPubkeyHash::from_str(&acceptor_data.acceptor_pubkey_hash)?,
+        &acceptor_pubkey_hash,
         PublicKey::from_str(&challenger_data.challenger_pubkey)?,
         LockTime::Blocks(Height::from_consensus(challenger_data.locktime)?),
         0,
