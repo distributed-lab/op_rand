@@ -1,7 +1,5 @@
 use bitcoin::{
-    Address, Amount, CompressedPublicKey, OutPoint, PublicKey, Txid,
-    consensus::Encodable,
-    hashes::{Hash, ripemd160, sha256},
+    Address, Amount, CompressedPublicKey, OutPoint, PublicKey, Txid, consensus::encode,
     secp256k1::rand::thread_rng,
 };
 use clap::Args;
@@ -52,13 +50,13 @@ pub struct CreateChallengeArgs {
 pub struct PublicChallengerData {
     pub id: String,
     pub amount: u64,
-    pub deposit_outpoint: OutPoint,
+    pub unsigned_deposit_transaction: String,
     pub third_rank_commitments: [String; 2],
     pub challenger_pubkey: String,
     pub challenger_pubkey_hash: String,
+    pub locktime: u32,
     pub proof: String,
     pub vk: String,
-    pub locktime: u32,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -163,21 +161,19 @@ pub async fn run(
 
     let third_rank_commitments = commitments.third_rank_commitments();
 
-    let sha256_hash = sha256::Hash::hash(&tweaked_pk.serialize());
-    let ripemd160_hash = ripemd160::Hash::hash(sha256_hash.as_byte_array());
-
     println!(
         "{} {} third-rank commitments generated",
         CHECK,
         style("2").bold().green()
     );
 
+    let challenger_pubkey_hash = PublicKey::new(tweaked_pk).wpubkey_hash()?;
     let pb = setup_progress_bar("Generating the challenger proof...".into());
     let proof = prover.generate_challenger_proof(
         first_rank_commitments.to_owned(),
         third_rank_commitments.to_owned(),
         &public_key,
-        ripemd160_hash.to_byte_array(),
+        &challenger_pubkey_hash,
     )?;
     pb.finish_with_message("Challenger proof generated");
 
@@ -236,13 +232,13 @@ pub async fn run(
     let public_challenge_output = PublicChallengerData {
         id: id.clone(),
         amount,
-        deposit_outpoint: OutPoint::new(deposit_tx.compute_txid(), 0),
+        unsigned_deposit_transaction: encode::serialize_hex(&deposit_tx),
         third_rank_commitments: [
             hex::encode(third_rank_commitments[0].inner().serialize()),
             hex::encode(third_rank_commitments[1].inner().serialize()),
         ],
         challenger_pubkey: hex::encode(public_key.serialize()),
-        challenger_pubkey_hash: hex::encode(ripemd160_hash.to_byte_array()),
+        challenger_pubkey_hash: hex::encode(challenger_pubkey_hash),
         proof: hex::encode(proof.proof()),
         vk: hex::encode(proof.vk()),
         locktime,
@@ -251,13 +247,10 @@ pub async fn run(
     let json_output = serde_json::to_string_pretty(&public_challenge_output)?;
     fs::write(&public_output, json_output)?;
 
-    let mut tx_bytes = Vec::new();
-    deposit_tx.consensus_encode(&mut tx_bytes)?;
-
     let private_challenge_output = PrivateChallengerData {
         id: id.clone(),
         amount,
-        deposit_transaction: hex::encode(tx_bytes),
+        deposit_transaction: encode::serialize_hex(&deposit_tx),
         first_rank_commitments: [
             hex::encode(first_rank_commitments[0].inner().0.secret_bytes()),
             hex::encode(first_rank_commitments[1].inner().0.secret_bytes()),

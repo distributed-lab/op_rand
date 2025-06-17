@@ -1,9 +1,13 @@
 use std::fs;
 
+use bitcoin::{Transaction, consensus::encode};
 use clap::Args;
-use console::{Emoji, style};
+use console::style;
 
-use crate::actions::create_challenge::PublicChallengerData;
+use crate::{
+    actions::create_challenge::PublicChallengerData,
+    ui::{CHAIN, CLOCK, KEY, LOCK, ROCKET, SHIELD},
+};
 
 #[derive(Args, Debug)]
 pub struct ChallengeInfoArgs {
@@ -11,13 +15,6 @@ pub struct ChallengeInfoArgs {
     #[clap(long, default_value = "challenger.json")]
     pub challenge_file: String,
 }
-
-static ROCKET: Emoji<'_, '_> = Emoji("🚀 ", "");
-static KEY: Emoji<'_, '_> = Emoji("🔑 ", "");
-static LOCK: Emoji<'_, '_> = Emoji("🔒 ", "");
-static SHIELD: Emoji<'_, '_> = Emoji("🛡️ ", "");
-static CLOCK: Emoji<'_, '_> = Emoji("⏰ ", "");
-static CHAIN: Emoji<'_, '_> = Emoji("⛓️ ", "");
 
 pub async fn run(ChallengeInfoArgs { challenge_file }: ChallengeInfoArgs) -> eyre::Result<()> {
     let challenge_json = fs::read_to_string(&challenge_file)?;
@@ -50,6 +47,9 @@ pub async fn run(ChallengeInfoArgs { challenge_file }: ChallengeInfoArgs) -> eyr
         style(format!("{:.8}", btc_amount)).bright().green()
     );
 
+    let deposit_tx: Transaction =
+        encode::deserialize_hex(&challenge_data.unsigned_deposit_transaction)?;
+
     // Deposit information
     println!("\n{}", style("┌─ DEPOSIT INFORMATION").bold().blue());
     println!("│");
@@ -57,17 +57,11 @@ pub async fn run(ChallengeInfoArgs { challenge_file }: ChallengeInfoArgs) -> eyr
     println!(
         "│   {} {}",
         style("TXID:").dim(),
-        style(challenge_data.deposit_outpoint.txid.to_string())
+        style(deposit_tx.compute_txid().to_string())
             .bright()
             .white()
     );
-    println!(
-        "│   {} {}",
-        style("VOUT:").dim(),
-        style(challenge_data.deposit_outpoint.vout.to_string())
-            .bright()
-            .white()
-    );
+    println!("│   {} {}", style("VOUT:").dim(), style(0).bright().white());
 
     // Locktime information
     println!("│");

@@ -1,4 +1,5 @@
-use bitcoin::secp256k1;
+use bitcoin::hashes::Hash;
+use bitcoin::{WPubkeyHash, secp256k1};
 use noir_rs::barretenberg::srs::setup_srs;
 use noir_rs::barretenberg::{prove::prove_ultra_honk, verify::verify_ultra_honk};
 use noir_rs::witness::from_vec_str_to_witness_map;
@@ -39,7 +40,7 @@ impl OpRandProver for BarretenbergProver {
         first_rank_commitments: [FirstRankCommitment; 2],
         third_rank_commitments: [ThirdRankCommitment; 2],
         challenger_public_key: &secp256k1::PublicKey,
-        challenger_public_key_hash: [u8; 20],
+        challenger_public_key_hash: &WPubkeyHash,
     ) -> Result<OpRandProof, crate::errors::ProverError> {
         // Extract the x and y coordinates from the challenger's public key
         let pk_coords = challenger_public_key.serialize_uncompressed();
@@ -74,7 +75,9 @@ impl OpRandProver for BarretenbergProver {
         witness_inputs.extend(bytes_to_string_array(h2_y)); // H2_y (32 bytes)
         witness_inputs.extend(bytes_to_string_array(pk_x)); // PK_x (32 bytes)
         witness_inputs.extend(bytes_to_string_array(pk_y)); // PK_y (32 bytes)
-        witness_inputs.extend(bytes_to_string_array(&challenger_public_key_hash)); // ADDR (20 bytes)
+        witness_inputs.extend(bytes_to_string_array(
+            &challenger_public_key_hash.as_raw_hash().to_byte_array(),
+        )); // ADDR (20 bytes)
 
         let witness_input_refs = witness_inputs
             .iter()
@@ -98,7 +101,7 @@ impl OpRandProver for BarretenbergProver {
         &self,
         _third_rank_commitments: [ThirdRankCommitment; 2],
         _challenger_public_key: &secp256k1::PublicKey,
-        _challenger_public_key_hash: [u8; 20],
+        _challenger_public_key_hash: &WPubkeyHash,
         proof: &OpRandProof,
     ) -> Result<(), crate::errors::ProverError> {
         // TODO: Add verification of public inputs
@@ -116,7 +119,7 @@ impl OpRandProver for BarretenbergProver {
         &self,
         acceptor_public_key: &secp256k1::PublicKey,
         acceptor_signature: &secp256k1::ecdsa::Signature,
-        acceptor_public_key_hash: [u8; 20],
+        acceptor_public_key_hash: &WPubkeyHash,
         third_rank_commitments: [ThirdRankCommitment; 2],
     ) -> Result<OpRandProof, crate::errors::ProverError> {
         // Extract the x and y coordinates from the acceptor's public key
@@ -147,7 +150,9 @@ impl OpRandProver for BarretenbergProver {
         witness_inputs.extend(bytes_to_string_array(h1_y)); // H1_y (32 bytes)
         witness_inputs.extend(bytes_to_string_array(h2_x)); // H2_x (32 bytes)
         witness_inputs.extend(bytes_to_string_array(h2_y)); // H2_y (32 bytes)
-        witness_inputs.extend(bytes_to_string_array(&acceptor_public_key_hash)); // ADDR (20 bytes)
+        witness_inputs.extend(bytes_to_string_array(
+            &acceptor_public_key_hash.as_raw_hash().to_byte_array(),
+        )); // ADDR (20 bytes)
 
         let witness_input_refs = witness_inputs
             .iter()
@@ -169,7 +174,7 @@ impl OpRandProver for BarretenbergProver {
 
     fn verify_acceptor_proof(
         &self,
-        _acceptor_public_key_hash: [u8; 20],
+        _acceptor_public_key_hash: &WPubkeyHash,
         _third_rank_commitments: [ThirdRankCommitment; 2],
         op_rand_proof: &OpRandProof,
     ) -> Result<(), crate::errors::ProverError> {
