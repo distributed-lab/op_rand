@@ -6,15 +6,17 @@ use crate::{
 };
 use base64::{Engine as _, engine::general_purpose};
 use bitcoin::{
-    Address, Amount, CompressedPublicKey, OutPoint, Txid,
+    Address, Amount, CompressedPublicKey, OutPoint, PublicKey, Transaction, Txid, WPubkeyHash,
     absolute::{Height, LockTime},
-    hashes::{Hash, ripemd160, sha256},
-    secp256k1::{Message, PublicKey, SecretKey},
+    consensus::encode::deserialize_hex,
+    hashes::{Hash, sha256},
+    secp256k1::{Message, SecretKey},
 };
 use clap::Args;
 use color_eyre::eyre;
 use console::style;
 use op_rand_prover::{BarretenbergProver, OpRandProof, OpRandProver};
+use op_rand_transaction_builder::validate_deposit_transaction;
 use op_rand_types::ThirdRankCommitment;
 use serde::{Deserialize, Serialize};
 use std::{fs, str::FromStr};
@@ -40,7 +42,6 @@ pub struct AcceptorData {
     pub acceptor_pubkey_hash: String,
     pub third_rank_commitments: [String; 2],
     pub psbt: String,
-    pub challenge_output_witness_script: String,
     pub proof: String,
     pub vk: String,
 }
@@ -95,9 +96,7 @@ pub async fn run(
         .map_err(|_| eyre::eyre!("Expected exactly 2 commitments"))?;
 
     let challenger_pubkey = PublicKey::from_str(&challenge_data.challenger_pubkey)?;
-    let challenger_pubkey_hash = hex::decode(&challenge_data.challenger_pubkey_hash)?
-        .try_into()
-        .map_err(|_| eyre::eyre!("Failed to convert challenger public key hash to array"))?;
+    let challenger_pubkey_hash = WPubkeyHash::from_str(&challenge_data.challenger_pubkey_hash)?;
     let proof = hex::decode(&challenge_data.proof)?;
     let vk = hex::decode(&challenge_data.vk)?;
     let proof_data = OpRandProof::new(proof, vk);
@@ -110,8 +109,8 @@ pub async fn run(
 
     prover.verify_challenger_proof(
         commitments.clone(),
-        &challenger_pubkey,
-        challenger_pubkey_hash,
+        &challenger_pubkey.inner,
+        &challenger_pubkey_hash,
         &proof_data,
     )?;
 
@@ -178,9 +177,28 @@ pub async fn run(
         style("Building challenge transaction...").bold().blue()
     );
 
-    let (challenge_script, psbt) = tx_builder.build_challenge_tx(
-        &challenger_pubkey.into(),
-        challenge_data.deposit_outpoint,
+    let deposit_transaction: Transaction =
+        deserialize_hex(&challenge_data.unsigned_deposit_transaction)?;
+
+    println!(
+        "\n{} {}",
+        SHIELD,
+        style("Validating deposit transaction...").bold().blue()
+    );
+
+    validate_deposit_transaction(&deposit_transaction, &challenger_pubkey_hash, 0)?;
+
+    println!(
+        "{} {}",
+        CHECK,
+        style("Deposit transaction validated successfully!")
+            .bold()
+            .green()
+    );
+
+    let psbt = tx_builder.build_challenge_tx(
+        &challenger_pubkey,
+        OutPoint::new(deposit_transaction.compute_txid(), 0),
         selected_commitment.to_owned(),
         LockTime::Blocks(Height::from_consensus(challenge_data.locktime)?),
         Amount::from_sat(challenge_data.amount),
@@ -190,12 +208,10 @@ pub async fn run(
     )?;
 
     let pk_combined = public_key.inner.combine(&selected_commitment.inner())?;
-
-    let sha256_hash = sha256::Hash::hash(&pk_combined.serialize());
-    let ripemd160_hash = ripemd160::Hash::hash(sha256_hash.as_byte_array());
+    let pubkey_hash = PublicKey::new(pk_combined).wpubkey_hash()?;
 
     let message =
-        Message::from_digest(sha256::Hash::hash(ripemd160_hash.as_byte_array()).to_byte_array());
+        Message::from_digest(sha256::Hash::hash(pubkey_hash.as_byte_array()).to_byte_array());
     let sk = SecretKey::from_slice(&private_key.to_bytes())?;
 
     let sig = secp.sign_ecdsa(&message, &sk);
@@ -210,12 +226,8 @@ pub async fn run(
     .await?;
     pb.finish_with_message("Acceptor circuit is set up");
     let pb = setup_progress_bar("Generating acceptor proof...".into());
-    let proof = prover.generate_acceptor_proof(
-        &public_key.inner,
-        &sig,
-        ripemd160_hash.to_byte_array(),
-        commitments,
-    )?;
+    let proof =
+        prover.generate_acceptor_proof(&public_key.inner, &sig, &pubkey_hash, commitments)?;
     pb.finish_with_message("Acceptor proof generated");
 
     println!(
@@ -228,10 +240,9 @@ pub async fn run(
         id: challenge_data.id.clone(),
         proof: hex::encode(proof.proof()),
         vk: hex::encode(proof.vk()),
-        acceptor_pubkey_hash: hex::encode(ripemd160_hash),
+        acceptor_pubkey_hash: hex::encode(pubkey_hash.to_byte_array()),
         third_rank_commitments: challenge_data.third_rank_commitments,
         psbt: general_purpose::STANDARD.encode(psbt.serialize()),
-        challenge_output_witness_script: challenge_script.to_hex_string(),
     };
 
     let acceptor_json = serde_json::to_string(&acceptor_output)?;

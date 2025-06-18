@@ -1,4 +1,4 @@
-use bitcoin::secp256k1;
+use bitcoin::{WPubkeyHash, secp256k1};
 use op_rand_types::{FirstRankCommitment, ThirdRankCommitment};
 use secp256k1::{PublicKey, ecdsa};
 
@@ -15,14 +15,14 @@ pub trait OpRandProver {
         first_rank_commitments: [FirstRankCommitment; 2],
         third_rank_commitments: [ThirdRankCommitment; 2],
         challenger_public_key: &PublicKey,
-        challenger_public_key_hash: [u8; 20],
+        challenger_public_key_hash: &WPubkeyHash,
     ) -> Result<OpRandProof, ProverError>;
     /// Used by the acceptor to verify the proof from the challenger
     fn verify_challenger_proof(
         &self,
         third_rank_commitments: [ThirdRankCommitment; 2],
         challenger_public_key: &secp256k1::PublicKey,
-        challenger_public_key_hash: [u8; 20],
+        challenger_public_key_hash: &WPubkeyHash,
         proof: &OpRandProof,
     ) -> Result<(), ProverError>;
 
@@ -31,13 +31,13 @@ pub trait OpRandProver {
         &self,
         acceptor_public_key: &PublicKey,
         acceptor_signature: &ecdsa::Signature,
-        acceptor_public_key_hash: [u8; 20],
+        acceptor_public_key_hash: &WPubkeyHash,
         third_rank_commitments: [ThirdRankCommitment; 2],
     ) -> Result<OpRandProof, ProverError>;
     /// Used by the challenger to verify the proof from the acceptor
     fn verify_acceptor_proof(
         &self,
-        acceptor_public_key_hash: [u8; 20],
+        acceptor_public_key_hash: &WPubkeyHash,
         third_rank_commitments: [ThirdRankCommitment; 2],
         proof: &OpRandProof,
     ) -> Result<(), ProverError>;
