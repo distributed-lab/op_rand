@@ -194,6 +194,10 @@ Developed by [Distributed Lab](https://distributedlab.com/)
 - 📖 **[CLI Documentation](apps/cli/README.md)**
 - 📄 **[Research Paper](https://arxiv.org/pdf/2501.16451)**
 
+## 🎯 TODO
+- Support of P2TR addresses
+- Implement flexible probability (better than 1/n)
+
 ## 🙏 Acknowledgments
 
 Special thanks to [passport-zk-circuits-noir](https://github.com/rarimo/passport-zk-circuits-noir) contributors for secp256k1 circuits which were instrumental in implementing the cryptographic primitives for this project.
