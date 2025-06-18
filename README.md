@@ -1,21 +1,25 @@
-# OP_RAND: Trustless Randomness Generation on Bitcoin
+# OP_RAND: VRF on Bitcoin
 
 [![Paper](https://img.shields.io/badge/paper-arXiv-red.svg)](https://arxiv.org/pdf/2501.16451)
 
 This is a method of emulation of OP_RAND opcode on Bitcoin through a trustless
-interactive game between transaction counterparties. The game result is probabilistic and doesn’t
-allow any party to cheat, increasing their chance of winning on any protocol step. The protocol is
+interactive game between transaction counterparties. The game result is probabilistic and doesn’t allow 
+any party to cheat, increasing their chance of winning on any protocol step. The protocol is
 organized in a way unrecognizable to any external party and doesn’t require any specific scripts
 or Bitcoin protocol updates.
 
 ## 📖 Overview
 
-OP_RAND brings trustless randomness to Bitcoin through the combination of:
+OP_RAND allows two (currently) users to create the set of transactions, the UTXO of the final one of which 
+can be spent with some probability by each counterparty. For that, OP_RAND uses:
 
-- **Cryptographic Commitments**: Multi-layered commitment scheme ensuring unpredictability
-- **Zero-Knowledge Proofs**: Powered by Noir circuits and Barretenberg backend for privacy and verification
-- **Bitcoin Script Integration**: Native Bitcoin transactions without protocol modifications
-- **Interactive Protocol**: Two-party challenge-response mechanism
+- **Commitments**: The protocol allows the challenger to create commitments on random values, only one of each 
+is used for the final address formation. An acceptor also mast create the commitment for their final public key, but 
+without the knowledge if that can be spent.
+- **Zero-Knowledge Proofs**: For proving the correctness of all actions (with hiding the secret data) between challenger 
+and acceptor it uses Noir circuits with Barretenberg backend. 
+- **Bitcoin Script**: OP_RAND doesn't require and update of the Bitcoin protocol or appearance of new op codes
+- **Interactive Protocol**: Two-party commit-reveal scheme
 
 ### Key Features
 
